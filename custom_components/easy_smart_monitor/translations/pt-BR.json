@@ -121,5 +121,42 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "temperatura": { "name": "Temperatura" },
+      "energia": { "name": "Energia" },
+      "tensao": { "name": "Tensão" },
+      "corrente": { "name": "Corrente" },
+      "humidade": { "name": "Umidade" },
+      "status": { "name": "Status" },
+      "conexao": { "name": "Status Conexão API" },
+      "sincro": { "name": "Última Sincronização" },
+      "fila": { "name": "Fila de Envio" }
+    },
+    "binary_sensor": {
+      "porta": { "name": "Porta" },
+      "sirene": { "name": "Sirene" }
+    },
+    "number": {
+      "intervalo_coleta": { "name": "Intervalo de Sincronia" },
+      "tempo_porta": { "name": "Tempo Porta Aberta" }
+    },
+    "switch": {
+      "ativo": { "name": "Equipamento Ativo" },
+      "sirene_ativa": { "name": "Sirene Ativa" }
+    }
+  },
+  "selector": {
+    "sensor_types": {
+      "options": {
+        "temperatura": "Temperatura",
+        "energia": "Energia",
+        "tensao": "Tensão",
+        "corrente": "Corrente",
+        "humidade": "Umidade",
+        "porta": "Porta"
+      }
+    }
   }
 }

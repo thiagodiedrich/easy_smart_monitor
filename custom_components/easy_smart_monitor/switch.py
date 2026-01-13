@@ -23,7 +23,8 @@ class EasySmartSwitch(SwitchEntity):
         self.entry = entry
         self.equip = equip
         self.key = key
-        self._attr_name = f"{equip['nome']} {name}"
+        self._attr_translation_key = key
+        self._attr_has_entity_name = True
         self._attr_icon = icon
         self._attr_unique_id = f"esm_sw_{key}_{equip['uuid']}"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, equip["uuid"])})

@@ -84,8 +84,8 @@ class EasySmartTelemetrySensor(SensorEntity):
 
         # Identificação
         self._attr_unique_id = f"esm_{sensor_cfg['uuid']}"
-        self._attr_name = f"{equip['nome']} {sensor_cfg['tipo'].capitalize()} ({sensor_cfg['ha_entity_id'].split('.')[-1]})"
-        self._attr_has_entity_name = False # Usa o nome completo definido acima
+        self._attr_translation_key = sensor_cfg.get("tipo")
+        self._attr_has_entity_name = True
 
         # Estado interno
         self._state = None
@@ -237,10 +237,10 @@ class EasySmartDiagnosticSensor(CoordinatorEntity, SensorEntity):
         self._diag_type = diag_type
 
         self._attr_unique_id = f"esm_diag_{diag_type}_{equip['uuid']}"
-        self._attr_name = f"{equip['nome']} {name}"
+        self._attr_translation_key = diag_type
         self._attr_icon = icon
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
-        self._attr_has_entity_name = False
+        self._attr_has_entity_name = True
 
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, equip["uuid"])})
 

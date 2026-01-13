@@ -23,7 +23,8 @@ class EasySmartNumber(NumberEntity):
         self.entry = entry
         self.equip = equip
         self.key = key
-        self._attr_name = f"{equip['nome']} {name}"
+        self._attr_translation_key = key
+        self._attr_has_entity_name = True
         self._attr_native_min_value = min_val
         self._attr_native_max_value = max_val
         self._attr_native_step = step

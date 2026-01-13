@@ -11,7 +11,7 @@ from homeassistant.const import (
 # Identificação da Integração
 DOMAIN = "easy_smart_monitor"
 NAME = "Easy Smart Monitor"
-VERSION = "1.0.13"
+VERSION = "1.0.13.3"
 MANUFACTURER = "Easy Smart"
 
 # Modo de Operação

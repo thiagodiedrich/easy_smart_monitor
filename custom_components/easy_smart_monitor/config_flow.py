@@ -127,10 +127,13 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("ha_entity_id"): selector.EntitySelector(
                     selector.EntitySelectorConfig(multiple=False)
                 ),
-                vol.Required("tipo"): vol.In([
-                    "temperatura", "energia", "tensao",
-                    "corrente", "humidade", "porta"
-                ]),
+                vol.Required("tipo"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["temperatura", "energia", "tensao", "corrente", "humidade", "porta"],
+                        translation_key="sensor_types",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 vol.Optional("add_another", default=False): bool,
             }),
         )
@@ -233,7 +236,13 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required("ha_entity_id"): selector.EntitySelector(
                     selector.EntitySelectorConfig(multiple=False)
                 ),
-                vol.Required("tipo"): vol.In(["temperatura", "energia", "tensao", "corrente", "humidade", "porta"]),
+                vol.Required("tipo"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["temperatura", "energia", "tensao", "corrente", "humidade", "porta"],
+                        translation_key="sensor_types",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }),
         )
 
