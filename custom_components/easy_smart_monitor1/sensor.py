@@ -46,6 +46,7 @@ class EasySmartMonitorEntity(CoordinatorEntity, SensorEntity):
     """Entidade para sensores de medição (Temperatura, Energia, etc)."""
 
     def __init__(self, coordinator, equip, sensor_cfg):
+        """Inicializa o sensor de medição."""
         super().__init__(coordinator)
         self._equip = equip
         self._config = sensor_cfg
@@ -108,10 +109,12 @@ class EasySmartMonitorEntity(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
+        """Retorna o valor nativo do sensor."""
         return self._state
 
     @property
     def extra_state_attributes(self):
+        """Retorna atributos extras da entidade."""
         return {
             "equipamento_nome": self._equip["nome"],
             "localizacao": self._equip["local"],
@@ -122,6 +125,7 @@ class EasySmartSirenEntity(CoordinatorEntity, BinarySensorEntity):
     """Entidade de Sirene com lógica de delay integrada."""
 
     def __init__(self, coordinator, equip, sensor_cfg):
+        """Inicializa a sirene binária."""
         super().__init__(coordinator)
         self._equip = equip
         self._config = sensor_cfg
@@ -159,7 +163,7 @@ class EasySmartSirenEntity(CoordinatorEntity, BinarySensorEntity):
             )
 
     async def _run_siren_timer(self):
-        """Timer assíncrono para o disparo."""
+        """Timer assíncrono para o disparo após o tempo definido."""
         try:
             await asyncio.sleep(SIREN_DELAY)
             self._is_on = True
@@ -169,4 +173,16 @@ class EasySmartSirenEntity(CoordinatorEntity, BinarySensorEntity):
             pass
 
     def _reset_siren(self):
-        """Desliga e cancela processos
+        """Desliga a sirene e cancela processos ativos."""
+        if self._timer_task:
+            self._timer_task.cancel()
+            self._timer_task = None
+
+        if self._is_on:
+            self._is_on = False
+            self.async_write_ha_state()
+
+    @property
+    def is_on(self) -> bool:
+        """Retorna se a sirene está em estado de alerta."""
+        return self._is_on

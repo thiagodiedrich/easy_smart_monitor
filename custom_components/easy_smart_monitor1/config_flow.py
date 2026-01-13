@@ -1,6 +1,6 @@
 import uuid
 import voluptuous as vol
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -23,16 +23,13 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self):
-        """Inicializa o fluxo com cache temporário para múltiplos equipamentos."""
-        self.data_temp: Dict[str, Any] = {
-            "equipments": []
-        }
+        """Inicializa o fluxo."""
+        self.data_temp: Dict[str, Any] = {"equipments": []}
         self.current_equipment: Dict[str, Any] = {}
 
     async def async_step_user(self, user_input=None) -> FlowResult:
-        """Passo 1: Login e Ativação."""
+        """Passo 1: Login."""
         errors = {}
-
         if user_input is not None:
             if TEST_MODE:
                 self.data_temp.update(user_input)
@@ -64,19 +61,15 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_management(self, user_input=None) -> FlowResult:
-        """Passo 2: Menu Principal (Sincronizado com pt-BR.json)."""
+        """Passo 2: Menu Principal."""
         return self.async_show_menu(
             step_id="management",
-            menu_options=[
-                "add_equipment",
-                "finish"
-            ]
+            menu_options=["add_equipment", "finish"]
         )
 
     async def async_step_add_equipment(self, user_input=None) -> FlowResult:
-        """Passo 3: Cadastro de Equipamento com tempo de atualização."""
+        """Passo 3: Cadastro de Equipamento."""
         if user_input is not None:
-            # Estrutura o equipamento atual para receber sensores depois
             self.current_equipment = {
                 "id": len(self.data_temp["equipments"]) + 1,
                 "uuid": str(uuid.uuid4()),
@@ -97,28 +90,23 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_add_sensor(self, user_input=None) -> FlowResult:
-        """Passo 4: Vínculo de Sensores (Loop de adição)."""
+        """Passo 4: Vínculo de Sensores."""
         if user_input is not None:
-            # Adiciona o sensor selecionado ao equipamento que estamos editando
-            sensor_entry = {
+            sensor_data = {
                 "id": len(self.current_equipment["sensors"]) + 1,
                 "uuid": str(uuid.uuid4()),
                 "ha_entity_id": user_input["ha_entity_id"],
                 "tipo": user_input["tipo"],
             }
-            self.current_equipment["sensors"].append(sensor_entry)
+            self.current_equipment["sensors"].append(sensor_data)
 
-            # Se marcar 'add_another', limpa o form e volta para este passo
             if user_input.get("add_another"):
                 return await self.async_step_add_sensor()
 
-            # Caso contrário, salva o equipamento na lista global e volta ao menu
             self.data_temp["equipments"].append(self.current_equipment)
             return await self.async_step_management()
 
-        # Busca entidades disponíveis no Home Assistant
         entities = sorted(self.hass.states.async_entity_ids())
-
         return self.async_show_form(
             step_id="add_sensor",
             data_schema=vol.Schema({
@@ -129,7 +117,7 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_finish(self, user_input=None) -> FlowResult:
-        """Passo Final: Cria a entrada da integração."""
+        """Finaliza a configuração."""
         if not self.data_temp.get("equipments"):
             return self.async_abort(reason="no_equipments")
 
@@ -140,28 +128,25 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
-        """Habilita o botão 'Configurar' na interface de integrações."""
-        return EasySmartOptionsFlowHandler(config_entry)
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
+        """Retorna o manipulador de opções."""
+        return EasySmartOptionsFlowHandler()
 
 
 class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
-    """Gerencia mudanças de configuração após a instalação."""
+    """Gerencia as opções da integração (Botão Configurar)."""
 
-    def __init__(self, config_entry):
-        self.config_entry = config_entry
-
-    async def async_step_init(self, user_input=None) -> FlowResult:
-        """Gerencia as opções da integração."""
+    async def async_step_init(self, user_input: Dict[str, Any] = None) -> FlowResult:
+        """Gerencia o passo inicial das opções."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
+
+        # Usamos self.config_entry (herdado) para ler os valores atuais
+        current_interval = self.config_entry.options.get("update_interval", 60)
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Optional(
-                    "update_interval",
-                    default=self.config_entry.options.get("update_interval", 60)
-                ): int,
+                vol.Optional("update_interval", default=current_interval): int,
             })
         )
