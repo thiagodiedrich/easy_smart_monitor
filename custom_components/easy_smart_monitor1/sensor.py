@@ -1,24 +1,20 @@
 import logging
-import asyncio
 from datetime import datetime
-from typing import Optional, Any, Dict
+from typing import Any, Dict
 
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
     SensorDeviceClass
 )
-from homeassistant.components.binary_sensor import (
-    BinarySensorEntity,
-    BinarySensorDeviceClass
-)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN, SIREN_DELAY
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,26 +23,25 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Configura todas as entidades (Sensores e Sirenes) da integração."""
+    """Configura as entidades de sensor baseadas nos equipamentos cadastrados."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     equipments = entry.data.get("equipments", [])
 
     entities = []
     for equip in equipments:
         for sensor_cfg in equip.get("sensors", []):
-            if sensor_cfg["tipo"] == "sirene":
-                entities.append(EasySmartSirenEntity(coordinator, equip, sensor_cfg))
-            else:
+            # Apenas sensores numéricos (Sirene e Porta vão para binary_sensor.py)
+            if sensor_cfg.get("tipo") not in ["sirene", "porta"]:
                 entities.append(EasySmartMonitorEntity(coordinator, equip, sensor_cfg))
 
     if entities:
-        async_add_entities(entities)
+        async_add_entities(entities, update_before_add=True)
 
 class EasySmartMonitorEntity(CoordinatorEntity, SensorEntity):
-    """Entidade para sensores de medição (Temperatura, Energia, etc)."""
+    """Representa um sensor de telemetria vinculado a um equipamento."""
 
     def __init__(self, coordinator, equip, sensor_cfg):
-        """Inicializa o sensor de medição."""
+        """Inicializa o sensor com vínculo ao dispositivo pai."""
         super().__init__(coordinator)
         self._equip = equip
         self._config = sensor_cfg
@@ -54,8 +49,17 @@ class EasySmartMonitorEntity(CoordinatorEntity, SensorEntity):
         self._attr_name = f"{equip['nome']} {sensor_cfg['tipo'].capitalize()}"
         self._state = None
 
-        # Definição de Classes e Unidades
-        tipo = sensor_cfg["tipo"]
+        # Agrupamento por Dispositivo no Home Assistant
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, equip["uuid"])},
+            name=equip["nome"],
+            manufacturer="Easy Smart",
+            model="Monitor v1",
+            suggested_area=equip.get("local"),
+        )
+
+        # Mapeamento de Classes e Unidades
+        tipo = sensor_cfg.get("tipo")
         if tipo == "temperatura":
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -77,8 +81,13 @@ class EasySmartMonitorEntity(CoordinatorEntity, SensorEntity):
             self._attr_state_class = SensorStateClass.MEASUREMENT
             self._attr_native_unit_of_measurement = "%"
 
+    @property
+    def native_value(self):
+        """Retorna o valor atual coletado."""
+        return self._state
+
     async def async_added_to_hass(self) -> None:
-        """Monitora o estado da entidade real e envia para a fila."""
+        """Configura a escuta de mudanças de estado da entidade vinculada."""
         await super().async_added_to_hass()
 
         @callback
@@ -87,102 +96,24 @@ class EasySmartMonitorEntity(CoordinatorEntity, SensorEntity):
             if new_state is None or new_state.state in ["unknown", "unavailable"]:
                 return
 
+            # Atualiza o estado interno da entidade
             self._state = new_state.state
 
-            # Adiciona à fila de sincronização
+            # Encaminha o dado para a fila de sincronização da API
             self.coordinator.client.add_to_queue({
-                "equip_id": self._equip["id"],
                 "equip_uuid": self._equip["uuid"],
-                "sensor_id": self._config["id"],
                 "sensor_uuid": self._config["uuid"],
                 "tipo": self._config["tipo"],
                 "status": self._state,
                 "timestamp": datetime.now().isoformat()
             })
+
+            # Notifica o HA para atualizar a interface
             self.async_write_ha_state()
 
+        # Monitora a entidade real do HA (Ex: sensor.thermometer_kitchen)
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass, self._config["ha_entity_id"], _state_listener
             )
         )
-
-    @property
-    def native_value(self):
-        """Retorna o valor nativo do sensor."""
-        return self._state
-
-    @property
-    def extra_state_attributes(self):
-        """Retorna atributos extras da entidade."""
-        return {
-            "equipamento_nome": self._equip["nome"],
-            "localizacao": self._equip["local"],
-            "entidade_origem": self._config["ha_entity_id"]
-        }
-
-class EasySmartSirenEntity(CoordinatorEntity, BinarySensorEntity):
-    """Entidade de Sirene com lógica de delay integrada."""
-
-    def __init__(self, coordinator, equip, sensor_cfg):
-        """Inicializa a sirene binária."""
-        super().__init__(coordinator)
-        self._equip = equip
-        self._config = sensor_cfg
-        self._attr_unique_id = f"esm_siren_{sensor_cfg['uuid']}"
-        self._attr_name = f"Alerta Sirene {equip['nome']}"
-        self._attr_device_class = BinarySensorDeviceClass.SAFETY
-        self._is_on = False
-        self._timer_task: Optional[asyncio.Task] = None
-
-    async def async_added_to_hass(self) -> None:
-        """Monitora a porta para gerenciar o disparo da sirene."""
-        await super().async_added_to_hass()
-
-        @callback
-        def _door_monitor(event):
-            new_state = event.data.get("new_state")
-            if not new_state:
-                return
-
-            if new_state.state in ["on", "open", "aberto"]:
-                if not self._timer_task or self._timer_task.done():
-                    self._timer_task = self.hass.async_create_task(self._run_siren_timer())
-            else:
-                self._reset_siren()
-
-        # Busca o ID da porta no mesmo equipamento
-        porta_id = next(
-            (s["ha_entity_id"] for s in self._equip["sensors"] if s["tipo"] == "porta"),
-            None
-        )
-
-        if porta_id:
-            self.async_on_remove(
-                async_track_state_change_event(self.hass, porta_id, _door_monitor)
-            )
-
-    async def _run_siren_timer(self):
-        """Timer assíncrono para o disparo após o tempo definido."""
-        try:
-            await asyncio.sleep(SIREN_DELAY)
-            self._is_on = True
-            self.async_write_ha_state()
-            _LOGGER.warning("SIRENE ATIVADA: Porta de %s aberta há %ss", self._equip['nome'], SIREN_DELAY)
-        except asyncio.CancelledError:
-            pass
-
-    def _reset_siren(self):
-        """Desliga a sirene e cancela processos ativos."""
-        if self._timer_task:
-            self._timer_task.cancel()
-            self._timer_task = None
-
-        if self._is_on:
-            self._is_on = False
-            self.async_write_ha_state()
-
-    @property
-    def is_on(self) -> bool:
-        """Retorna se a sirene está em estado de alerta."""
-        return self._is_on

@@ -1,47 +1,39 @@
 """Constantes para a integração Easy Smart Monitor."""
-from typing import Final
 
-# IMPORTANTE: O DOMAIN deve ser o nome exato da pasta em custom_components
-DOMAIN: Final = "easy_smart_monitor1"
+# Domínio da integração (Nome da pasta em custom_components)
+DOMAIN = "easy_smart_monitor1"
 
-# Modo de Teste: Mude para False para habilitar comunicação real com a API
-TEST_MODE: Final = True
+# Modo de Operação
+# True: Não exige API real, aceita qualquer login e simula envios no log.
+# False: Modo de produção. Exige API funcional para autenticação e envio.
+TEST_MODE = True
 
-# Configurações de Armazenamento Persistente (Módulo Store)
-STORAGE_VERSION: Final = 1
-STORAGE_KEY: Final = f"{DOMAIN}_storage"
+# Chaves de Configuração (ConfigEntry)
+CONF_API_HOST = "api_host"
+CONF_USERNAME = "username"
+CONF_PASSWORD = "password"
 
-# Chaves de Configuração utilizadas no Config Flow
-CONF_API_HOST: Final = "api_host"
-CONF_USERNAME: Final = "username"
-CONF_PASSWORD: Final = "password"
-CONF_EQUIPMENTS: Final = "equipments"
-CONF_UPDATE_INTERVAL: Final = "update_interval"
+# Configurações de Lógica e Performance
+# Tempo (em segundos) que a porta deve ficar aberta para a sirene ativar
+SIREN_DELAY = 60
 
-# Intervalos de Tempo Padrão (em segundos)
-DEFAULT_SCAN_INTERVAL: Final = 30  # Frequência de leitura local
-DEFAULT_API_INTERVAL: Final = 60   # Frequência de envio para a API
+# Intervalo padrão de sincronização com a API (em segundos)
+DEFAULT_UPDATE_INTERVAL = 60
 
-# Definições de Tipos de Sensores Suportados
-SENSOR_TYPES: Final = [
+# Lista exata de tipos de sensores suportados
+# Estas strings são usadas como chaves de tradução no pt-BR.json
+SENSOR_TYPES = [
     "temperatura",
     "porta",
     "energia",
-    "sirene",
-    "botao",
-    "humidade",
     "tensao",
-    "corrente"
+    "corrente",
+    "humidade",
+    "sirene"
 ]
 
-# Atributos para estruturação do JSON enviado à API
-ATTR_EQUIPMENT_ID: Final = "equip_id"
-ATTR_EQUIPMENT_UUID: Final = "equip_uuid"
-ATTR_SENSOR_ID: Final = "sensor_id"
-ATTR_SENSOR_UUID: Final = "sensor_uuid"
-ATTR_SENSOR_TYPE: Final = "tipo"
-ATTR_STATUS: Final = "status"
-ATTR_TIMESTAMP: Final = "timestamp"
+# Nome do arquivo de persistência local dentro da pasta /config/.storage/
+STORAGE_FILE = "easy_smart_monitor1_queue.json"
 
-# Configurações da Sirene
-SIREN_DELAY: Final = 120  # Tempo de porta aberta até disparar (segundos)
+# Versão da integração para logs e headers de API
+VERSION = "1.0.8"

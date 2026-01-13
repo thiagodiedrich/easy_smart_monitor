@@ -2,82 +2,91 @@
   "config": {
     "step": {
       "user": {
-        "title": "Easy Smart Monitor: Login",
-        "description": "Conecte sua conta à API de monitoramento central.",
+        "title": "Easy Smart Monitor: Autenticação",
+        "description": "Configure o acesso à API central para envio das métricas de refrigeração.",
         "data": {
-          "api_host": "Servidor da API (Host)",
-          "username": "Usuário",
-          "password": "Senha"
+          "api_host": "Servidor da API (Ex: http://192.168.1.50:5000)",
+          "username": "Usuário da API",
+          "password": "Senha de Acesso"
         }
       },
       "management": {
-        "title": "Painel de Equipamentos",
-        "description": "Configure seus ativos de refrigeração.",
+        "title": "Painel de Ativos",
+        "description": "Gerencie a frota de equipamentos antes de finalizar a instalação.",
         "menu_options": {
           "add_equipment": "Cadastrar Novo Equipamento",
-          "finish": "Concluir e Iniciar Monitoramento"
+          "finish": "Concluir Configuração"
         }
       },
       "add_equipment": {
-        "title": "Novo Equipamento",
-        "description": "Identifique o freezer ou câmara que será monitorado.",
+        "title": "Dados do Ativo",
+        "description": "Identifique o equipamento (Ex: Freezer 01).",
         "data": {
           "nome": "Nome do Equipamento",
-          "local": "Localização Física",
-          "intervalo_fila": "Tempo de Sincronia (Segundos)"
+          "local": "Localização (Ex: Cozinha)",
+          "intervalo_fila": "Sincronização Local (Segundos)"
         }
       },
       "add_sensor": {
         "title": "Vincular Sensores",
-        "description": "Associe os sensores do Home Assistant a este equipamento.",
+        "description": "Selecione uma entidade do Home Assistant para monitorar.",
         "data": {
           "ha_entity_id": "Entidade do HA",
-          "tipo": "Tipo de Medição",
+          "tipo": "Tipo de Grandeza",
           "add_another": "Vincular outro sensor a este equipamento?"
         }
       }
     },
     "error": {
-      "invalid_auth": "Autenticação falhou: verifique usuário e senha.",
-      "cannot_connect": "Não foi possível alcançar o servidor.",
-      "unknown": "Erro inesperado no sistema."
+      "invalid_auth": "Credenciais inválidas. Verifique usuário e senha.",
+      "cannot_connect": "Não foi possível conectar ao host da API.",
+      "unknown": "Ocorreu um erro inesperado durante a configuração."
     },
     "abort": {
-      "no_equipments": "Você precisa cadastrar ao menos um equipamento para continuar.",
-      "already_configured": "Este serviço já está configurado nesta instância."
+      "no_equipments": "Operação cancelada: nenhum equipamento foi cadastrado.",
+      "already_configured": "Este serviço já está configurado neste Home Assistant."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Gestão de Monitoramento",
-        "description": "Gerencie seus equipamentos ou altere configurações de performance.",
+        "title": "Gestão e Ajustes",
+        "description": "O que você deseja fazer na integração Easy Smart?",
         "menu_options": {
-          "add_more_equipment": "Adicionar Novo Freezer/Equipamento",
-          "change_interval": "Ajustar Intervalo Global de Envio"
+          "add_more_equipment": "Adicionar Novo Equipamento (Expansão)",
+          "remove_equipment": "Remover Equipamento Existente",
+          "change_interval": "Ajustar Intervalo de Sincronização"
         }
       },
       "add_more_equipment": {
-        "title": "Expansão de Monitoramento",
-        "description": "Insira os dados do novo ativo de refrigeração.",
+        "title": "Novo Ativo",
+        "description": "Insira as informações do novo equipamento.",
         "data": {
           "nome": "Nome do Equipamento",
           "local": "Localização"
         }
       },
       "add_more_sensor": {
-        "title": "Sensores Adicionais",
-        "description": "Vincule os sensores para o novo equipamento cadastrado.",
+        "title": "Configurar Sensores",
+        "description": "Vincule os sensores para o novo equipamento.",
         "data": {
           "ha_entity_id": "Entidade do HA",
-          "tipo": "Tipo de Medição",
-          "add_another": "Adicionar mais sensores a este novo equipamento?"
+          "tipo": "Tipo de Grandeza",
+          "add_another": "Adicionar mais sensores?"
+        }
+      },
+      "remove_equipment": {
+        "title": "Excluir Equipamento",
+        "description": "AVISO: Isso removerá o dispositivo e todas as suas entidades permanentemente.",
+        "data": {
+          "equip_uuid": "Selecione o Equipamento"
         }
       },
       "change_interval": {
-        "title": "Performance da API",
+        "title": "Intervalo Global",
+        "description": "Ajuste o tempo de despacho da fila para a API.",
         "data": {
-          "update_interval": "Tempo global de envio da fila (Segundos)"
+          "update_interval": "Intervalo de envio (Segundos)"
         }
       }
     }
@@ -86,12 +95,12 @@
     "tipo": {
       "options": {
         "temperatura": "Temperatura (°C)",
-        "porta": "Status de Porta (Aberto/Fechado)",
-        "energia": "Potência (W)",
-        "tensao": "Tensão (V)",
+        "porta": "Estado de Porta (Aberto/Fechado)",
+        "energia": "Potência Ativa (W)",
+        "tensao": "Tensão Elétrica (V)",
         "corrente": "Corrente (A)",
-        "humidade": "Umidade (%)",
-        "sirene": "Sirene de Alerta Local"
+        "humidade": "Umidade Relativa (%)",
+        "sirene": "Sirene de Alerta (Segurança)"
       }
     }
   }

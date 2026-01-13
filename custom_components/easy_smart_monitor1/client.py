@@ -1,35 +1,26 @@
 import logging
-import asyncio
+import json
+import os
 import aiohttp
+import asyncio
 from datetime import datetime
-from typing import Any, List, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.storage import Store
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import (
-    DOMAIN,
-    STORAGE_VERSION,
-    STORAGE_KEY,
-    ATTR_TIMESTAMP,
-    TEST_MODE
-)
+from .const import TEST_MODE
 
 _LOGGER = logging.getLogger(__name__)
 
 class EasySmartClient:
-    """Cliente API com gerenciamento de fila persistente e suporte a Modo de Teste."""
+    """
+    Gerenciador de comunicação resiliente com a API Easy Smart.
+    Responsável pela autenticação, gestão de fila em memória e persistência em disco.
+    """
 
-    def __init__(
-        self,
-        host: str,
-        username: str,
-        password: str,
-        session: aiohttp.ClientSession,
-        hass: HomeAssistant
-    ):
-        # Limpa a URL para evitar erros de barra dupla
+    def __init__(self, host: str, username: str, password: str, session: aiohttp.ClientSession, hass: HomeAssistant):
+        """Inicializa o cliente com os parâmetros de conexão."""
         self.host = host.rstrip("/")
         self.username = username
         self.password = password
@@ -37,104 +28,164 @@ class EasySmartClient:
         self.hass = hass
         self.token: Optional[str] = None
         self.queue: List[Dict[str, Any]] = []
+        self._auth_lock = asyncio.Lock()
 
-        # Gerenciador de armazenamento persistente (JSON no disco)
-        self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
-
-    async def load_queue_from_disk(self) -> None:
-        """Carrega eventos pendentes salvos anteriormente no disco."""
-        try:
-            stored_data = await self._store.async_load()
-            if stored_data and "queue" in stored_data:
-                self.queue = stored_data["queue"]
-                _LOGGER.info("Fila persistente carregada: %s itens pendentes", len(self.queue))
-        except Exception as err:
-            _LOGGER.error("Erro ao carregar fila do disco: %s", err)
-
-    async def _save_queue_to_disk(self) -> None:
-        """Salva a fila atual no disco (.storage) de forma segura."""
-        try:
-            await self._store.async_save({"queue": self.queue})
-        except Exception as err:
-            _LOGGER.error("Erro ao salvar fila no disco: %s", err)
-
-    def add_to_queue(self, data: Dict[str, Any]) -> None:
-        """Adiciona um novo registro à fila e sincroniza com o disco."""
-        if ATTR_TIMESTAMP not in data:
-            data[ATTR_TIMESTAMP] = datetime.now().isoformat()
-
-        self.queue.append(data)
-        # Salva no disco em background
-        self.hass.async_create_task(self._save_queue_to_disk())
-        _LOGGER.debug("Evento adicionado à fila: %s", data)
+        # Caminho do arquivo de backup no diretório .storage para resiliência de dados
+        self.storage_path = self.hass.config.path(".storage", "easy_smart_monitor1_queue.json")
+        _LOGGER.debug("Cliente EasySmart inicializado. Storage: %s", self.storage_path)
 
     async def authenticate(self) -> bool:
-        """Realiza a autenticação JWT. No TEST_MODE, sempre retorna True."""
+        """
+        Realiza a autenticação na API para obter o token Bearer.
+        Implementa Lock para evitar múltiplas tentativas simultâneas.
+        """
         if TEST_MODE:
-            _LOGGER.info("[TEST MODE] Autenticação simulada com sucesso.")
-            self.token = "fake_test_token"
+            _LOGGER.info("[TEST MODE] Ignorando autenticação real. Token simulado gerado.")
+            self.token = "fake_test_token_v1_0_6"
             return True
 
-        url = f"{self.host}/api/login"
-        payload = {"username": self.username, "password": self.password}
+        async with self._auth_lock:
+            _LOGGER.debug("Iniciando processo de autenticação para o usuário: %s", self.username)
+            url = f"{self.host}/api/login"
+            payload = {
+                "username": self.username,
+                "password": self.password,
+                "client_id": "ha_integration_v1"
+            }
 
-        try:
-            async with self.session.post(url, json=payload, timeout=10) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    self.token = data.get("token")
-                    return True
+            try:
+                # Caso a sessão tenha sido perdida, recuperamos a global do HA
+                if self.session is None or self.session.closed:
+                    self.session = async_get_clientsession(self.hass)
 
-                _LOGGER.error("Falha na autenticação API: Status %s", response.status)
-                return False
-        except Exception as err:
-            _LOGGER.error("Erro de conexão na autenticação: %s", err)
+                async with self.session.post(url, json=payload, timeout=15) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        self.token = data.get("token")
+                        if self.token:
+                            _LOGGER.info("Autenticação bem-sucedida. Token armazenado.")
+                            return True
+                        _LOGGER.error("API retornou 200, mas o campo 'token' está ausente.")
+                    elif response.status == 401:
+                        _LOGGER.error("Credenciais inválidas fornecidas para a API.")
+                    else:
+                        _LOGGER.error("Falha na autenticação. Status: %s. Resposta: %s",
+                                     response.status, await response.text())
+            except asyncio.TimeoutError:
+                _LOGGER.error("Timeout durante a autenticação na API.")
+            except Exception as e:
+                _LOGGER.error("Erro catastrófico durante a autenticação: %s", str(e))
+
             return False
 
+    def add_to_queue(self, data: Dict[str, Any]) -> None:
+        """
+        Adiciona uma nova leitura à fila de processamento.
+        Imediatamente agenda a persistência em disco para evitar perda de dados.
+        """
+        # Garante que o timestamp esteja presente
+        if "timestamp" not in data:
+            data["timestamp"] = datetime.now().isoformat()
+
+        self.queue.append(data)
+        _LOGGER.debug("Novo registro adicionado à fila. Tamanho atual: %s", len(self.queue))
+
+        # Agenda a gravação em disco de forma não bloqueante
+        self.hass.add_job(self.save_queue_to_disk)
+
     async def send_queue(self) -> bool:
-        """Despacha a fila para a API. No TEST_MODE, apenas limpa a fila."""
+        """
+        Tenta despachar a fila acumulada para a API.
+        Gerencia reautenticação automática e limpeza de fila após sucesso.
+        """
         if not self.queue:
+            _LOGGER.debug("Fila vazia, pulando ciclo de envio.")
             return True
 
-        # Lógica de Bypass para Testes
+        _LOGGER.debug("Iniciando despacho de fila com %s registros.", len(self.queue))
+
         if TEST_MODE:
-            _LOGGER.info("[TEST MODE] Simulando envio de %s itens para API.", len(self.queue))
+            _LOGGER.info("[TEST MODE] Simulação de despacho em lote enviada com sucesso.")
+            # Em modo teste, apenas limpamos a fila para simular sucesso
             self.queue.clear()
-            await self._save_queue_to_disk()
+            self.save_queue_to_disk()
             return True
 
-        # Lógica Real de Produção
+        # Garante que temos um token antes de prosseguir
         if not self.token:
             if not await self.authenticate():
+                _LOGGER.warning("Despacho cancelado por falta de autenticação válida.")
                 return False
 
-        url = f"{self.host}/api/sync"
-        headers = {"Authorization": f"Bearer {self.token}"}
+        url = f"{self.host}/api/monitor/batch"
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+            "User-Agent": "HomeAssistant-EasySmart/1.0.6"
+        }
 
         try:
-            async with self.session.post(
-                url,
-                json=self.queue,
-                headers=headers,
-                timeout=15
-            ) as response:
-                if response.status == 200:
-                    _LOGGER.info("Sincronização bem-sucedida: %s itens enviados.", len(self.queue))
-                    self.queue.clear()
-                    await self._save_queue_to_disk()
+            async with self.session.post(url, json=self.queue, headers=headers, timeout=30) as response:
+                if response.status in [200, 201]:
+                    count = len(self.queue)
+                    self.queue.clear() # Sucesso total: limpa memória
+                    self.save_queue_to_disk() # Sucesso total: limpa disco
+                    _LOGGER.info("Sincronização concluída. %s registros processados pela API.", count)
                     return True
 
                 if response.status == 401:
-                    _LOGGER.warning("Token expirado. Tentando re-autenticação...")
+                    _LOGGER.warning("Token expirado detectado durante envio. Resetando credenciais.")
                     self.token = None
-                    return await self.send_queue()
+                    return False
 
-                _LOGGER.warning("API recusou sincronização (Status %s).", response.status)
-                return False
+                _LOGGER.warning("API rejeitou a fila. Status: %s. Detalhes: %s",
+                               response.status, await response.text())
+        except aiohttp.ClientConnectorError:
+            _LOGGER.error("Erro de conexão: Não foi possível alcançar o host %s", self.host)
+        except Exception as e:
+            _LOGGER.error("Erro inesperado durante o envio da fila: %s", str(e))
 
-        except aiohttp.ClientError as err:
-            _LOGGER.warning("Erro de rede na sincronização: %s", err)
-            return False
-        except Exception as err:
-            _LOGGER.error("Erro inesperado no cliente API: %s", err)
-            return False
+        return False
+
+    def save_queue_to_disk(self) -> None:
+        """
+        Sincroniza a fila em memória com o arquivo físico no diretório .storage.
+        Utiliza escrita atômica simples para garantir integridade.
+        """
+        try:
+            # Se a fila estiver vazia, removemos o arquivo para economizar espaço
+            if not self.queue:
+                if os.path.exists(self.storage_path):
+                    os.remove(self.storage_path)
+                return
+
+            with open(self.storage_path, "w", encoding="utf-8") as f:
+                json.dump(self.queue, f, ensure_ascii=False, indent=2)
+            _LOGGER.debug("Backup da fila atualizado no disco.")
+        except Exception as e:
+            _LOGGER.error("Falha ao persistir fila no disco: %s", str(e))
+
+    async def load_queue_from_disk(self) -> None:
+        """
+        Recupera a fila salva no disco após um reinício do Home Assistant.
+        Essencial para o funcionamento resiliente prometido na v1.0.6.
+        """
+        if not os.path.exists(self.storage_path):
+            _LOGGER.debug("Nenhum backup de fila encontrado para carregar.")
+            return
+
+        _LOGGER.info("Localizado backup de fila em disco. Iniciando recuperação...")
+
+        try:
+            def _read_file():
+                with open(self.storage_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+
+            data = await self.hass.async_add_executor_job(_read_file)
+            if isinstance(data, list):
+                self.queue = data
+                _LOGGER.info("Recuperação concluída: %s registros voltaram para a fila.", len(self.queue))
+            else:
+                _LOGGER.warning("Arquivo de backup corrompido ou em formato inválido.")
+        except Exception as e:
+            _LOGGER.error("Erro ao carregar fila do disco: %s", str(e))

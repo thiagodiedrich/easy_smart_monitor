@@ -1,14 +1,15 @@
-"""Inicialização da integração Easy Smart Monitor."""
 import logging
+import asyncio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
-    DOMAIN, 
-    CONF_API_HOST, 
-    CONF_USERNAME, 
+    DOMAIN,
+    CONF_API_HOST,
+    CONF_USERNAME,
     CONF_PASSWORD,
     TEST_MODE
 )
@@ -17,19 +18,38 @@ from .coordinator import EasySmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# Lista de plataformas suportadas. 
-# O sensor.py gerencia as medições e o binary_sensor.py gerencia a sirene.
+# Plataformas gerenciadas pela integração
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Configura o Easy Smart Monitor a partir de uma entrada de configuração (ConfigEntry)."""
-    
-    _LOGGER.debug("Iniciando setup da integração %s para o usuário %s", DOMAIN, entry.data.get(CONF_USERNAME))
+    """Configura o Easy Smart Monitor e limpa dispositivos removidos."""
 
-    # 1. Cria a sessão HTTP vinculada ao Home Assistant
+    _LOGGER.debug("Iniciando setup da integração %s", DOMAIN)
+
+    # 1. LIMPEZA DE ENTIDADES ÓRFÃS
+    # Este bloco garante que, se um equipamento foi removido via menu 'Configurar',
+    # suas entidades sejam deletadas do registro interno do Home Assistant.
+    ent_reg = er.async_get(hass)
+    entities_in_registry = er.async_entries_for_config_entry(ent_reg, entry.entry_id)
+
+    # Mapeia todos os UUIDs de sensores que deveriam existir atualmente
+    valid_unique_ids = []
+    for equip in entry.data.get("equipments", []):
+        for sensor in equip.get("sensors", []):
+            # Formato do unique_id definido no sensor.py
+            valid_unique_ids.append(f"esm_{sensor['uuid']}")
+            if sensor["tipo"] == "sirene":
+                valid_unique_ids.append(f"esm_siren_{sensor['uuid']}")
+
+    # Remove do registro o que não está mais na configuração
+    for entity in entities_in_registry:
+        if entity.unique_id not in valid_unique_ids:
+            _LOGGER.info("Removendo entidade órfã do registro: %s", entity.entity_id)
+            ent_reg.async_remove(entity.entity_id)
+
+    # 2. INICIALIZAÇÃO DO CLIENTE E COORDENADOR
     session = async_get_clientsession(hass)
-    
-    # 2. Instancia o Cliente de API (Coração da comunicação e fila)
+
     client = EasySmartClient(
         host=entry.data[CONF_API_HOST],
         username=entry.data[CONF_USERNAME],
@@ -38,61 +58,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass=hass
     )
 
-    # 3. Carrega a fila persistente do disco (.storage/easy_smart_monitor1_storage)
-    # Isso impede a perda de dados se o HA for reiniciado com a API offline.
+    # Carrega dados salvos em disco (.storage)
     await client.load_queue_from_disk()
 
-    # 4. Tenta a autenticação inicial no servidor
-    # Em TEST_MODE (no const.py), o client sempre simulará sucesso.
+    # Autenticação inicial (respeita o TEST_MODE)
     if not await client.authenticate():
         if not TEST_MODE:
-            _LOGGER.warning("Falha inicial na autenticação com a API. A integração tentará novamente em segundo plano.")
-        else:
-            _LOGGER.info("[TEST MODE] Autenticação simulada ativada.")
+            _LOGGER.warning("Falha na autenticação inicial da API. Tentando em segundo plano.")
 
-    # 5. Configura o DataUpdateCoordinator
-    # O intervalo de atualização vem das opções (configuráveis na UI) ou padrão de 60s
+    # Configuração do Coordenador de Dados
     update_interval = entry.options.get("update_interval", 60)
+    coordinator = EasySmartCoordinator(hass, client, update_interval)
 
-    coordinator = EasySmartCoordinator(
-        hass,
-        client,
-        update_interval
-    )
-
-    # 6. Executa a primeira atualização de dados para popular as entidades
-    # O timeout garante que o HA não trave se a rede estiver lenta
+    # Primeiro refresh para popular as entidades
     await coordinator.async_config_entry_first_refresh()
 
-    # 7. Armazena o coordenador no objeto global hass.data para acesso pelas plataformas
+    # Armazena o coordenador globalmente
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # 8. Encaminha o setup para as plataformas (sensor.py e binary_sensor.py)
-    # Isso ativa as entidades físicas no sistema.
+    # 3. CARREGAMENTO DAS PLATAFORMAS (sensor.py e binary_sensor.py)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # 9. Registra o listener para atualizações nas opções (Ex: mudar o tempo de sync)
+    # Registra listener para mudanças nas opções (configurar)
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
-    _LOGGER.info("Configuração da integração %s concluída com sucesso.", DOMAIN)
     return True
 
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Atualiza a entrada de configuração quando as opções são alteradas pelo usuário."""
-    _LOGGER.debug("Opções atualizadas detectadas, recarregando a integração.")
+    """Atualiza a integração quando as opções mudam."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Descarrega a integração e remove os recursos da memória de forma limpa."""
-    _LOGGER.debug("Descarregando a integração %s", DOMAIN)
-
-    # Descarrega as plataformas (Sensores e Sirenes)
+    """Descarrega a integração e limpa a memória."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    # Limpa os dados do coordenador da memória se o descarregamento das plataformas foi OK
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
-        _LOGGER.info("Integração %s descarregada com sucesso.", DOMAIN)
+        _LOGGER.debug("Integração %s descarregada com sucesso.", DOMAIN)
 
     return unload_ok

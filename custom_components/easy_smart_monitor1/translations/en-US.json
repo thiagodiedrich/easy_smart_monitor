@@ -2,21 +2,105 @@
   "config": {
     "step": {
       "user": {
-        "title": "Easy Smart Monitor Activation",
-        "description": "Enter your API credentials to activate.",
+        "title": "Easy Smart Monitor: Authentication",
+        "description": "Configure the API access to send your refrigeration metrics.",
         "data": {
-          "username": "Username",
-          "password": "Password",
-          "api_host": "API Host"
+          "api_host": "API Server Host (Ex: http://192.168.1.50:5000)",
+          "username": "API Username",
+          "password": "Access Password"
         }
       },
       "management": {
-        "title": "Device Management",
+        "title": "Asset Management",
+        "description": "Manage your equipment fleet before finishing the installation.",
         "menu_options": {
-          "add_equipment": "Add New Equipment",
-          "status_api": "View Connection Status",
-          "finish": "Finish and Save"
+          "add_equipment": "Register New Equipment",
+          "finish": "Finish Configuration"
         }
+      },
+      "add_equipment": {
+        "title": "Asset Data",
+        "description": "Identify the equipment (Ex: Freezer 01).",
+        "data": {
+          "nome": "Equipment Name",
+          "local": "Location (Ex: Kitchen)",
+          "intervalo_fila": "Sync Interval (Seconds)"
+        }
+      },
+      "add_sensor": {
+        "title": "Link Sensors",
+        "description": "Select a Home Assistant entity to monitor.",
+        "data": {
+          "ha_entity_id": "HA Entity",
+          "tipo": "Measurement Type",
+          "add_another": "Link another sensor to this equipment?"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials. Please check username and password.",
+      "cannot_connect": "Unable to connect to the API host.",
+      "unknown": "An unexpected error occurred during configuration."
+    },
+    "abort": {
+      "no_equipments": "Operation canceled: no equipment was registered.",
+      "already_configured": "This service is already configured in this Home Assistant."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Management & Settings",
+        "description": "What would you like to do with the Easy Smart integration?",
+        "menu_options": {
+          "add_more_equipment": "Add New Equipment (Expansion)",
+          "remove_equipment": "Remove Existing Equipment",
+          "change_interval": "Adjust Sync Interval"
+        }
+      },
+      "add_more_equipment": {
+        "title": "New Asset",
+        "description": "Enter the information for the new equipment.",
+        "data": {
+          "nome": "Equipment Name",
+          "local": "Location"
+        }
+      },
+      "add_more_sensor": {
+        "title": "Configure Sensors",
+        "description": "Link sensors to the new equipment.",
+        "data": {
+          "ha_entity_id": "HA Entity",
+          "tipo": "Measurement Type",
+          "add_another": "Add more sensors?"
+        }
+      },
+      "remove_equipment": {
+        "title": "Delete Equipment",
+        "description": "WARNING: This will permanently remove the device and all its entities.",
+        "data": {
+          "equip_uuid": "Select Equipment"
+        }
+      },
+      "change_interval": {
+        "title": "Global Interval",
+        "description": "Adjust the queue dispatch time to the API.",
+        "data": {
+          "update_interval": "Sync Interval (Seconds)"
+        }
+      }
+    }
+  },
+  "selector": {
+    "tipo": {
+      "options": {
+        "temperatura": "Temperature (°C)",
+        "porta": "Door Status (Open/Closed)",
+        "energia": "Active Power (W)",
+        "tensao": "Voltage (V)",
+        "corrente": "Current (A)",
+        "humidade": "Relative Humidity (%)",
+        "sirene": "Alert Siren (Safety)"
       }
     }
   }

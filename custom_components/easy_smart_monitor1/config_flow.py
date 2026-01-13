@@ -1,11 +1,12 @@
 import uuid
 import voluptuous as vol
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
     DOMAIN,
@@ -26,7 +27,7 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.current_equipment: Dict[str, Any] = {}
 
     async def async_step_user(self, user_input=None) -> FlowResult:
-        """Passo 1: Login/Ativação."""
+        """Passo 1: Login."""
         errors = {}
         if user_input is not None:
             if TEST_MODE:
@@ -59,7 +60,7 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_management(self, user_input=None) -> FlowResult:
-        """Menu de Gerenciamento Inicial."""
+        """Menu Inicial."""
         return self.async_show_menu(
             step_id="management",
             menu_options=["add_equipment", "finish"]
@@ -115,7 +116,7 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_finish(self, user_input=None) -> FlowResult:
-        """Finaliza a instalação inicial."""
+        """Finaliza instalação."""
         if not self.data_temp.get("equipments"):
             return self.async_abort(reason="no_equipments")
 
@@ -126,39 +127,57 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
         return EasySmartOptionsFlowHandler()
 
 class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
-    """Gerencia a edição de equipamentos via botão 'Configurar'."""
+    """Gerencia Edição e Remoção Real de Dispositivos."""
 
     def __init__(self):
         self.current_equipment: Dict[str, Any] = {}
 
     async def async_step_init(self, user_input=None) -> FlowResult:
-        """Menu de opções."""
+        """Menu de Opções."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["add_more_equipment", "change_interval"]
+            menu_options=["add_more_equipment", "remove_equipment", "change_interval"]
         )
 
-    async def async_step_change_interval(self, user_input=None) -> FlowResult:
-        """Altera apenas o intervalo global."""
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+    async def async_step_remove_equipment(self, user_input=None) -> FlowResult:
+        """Remove o equipamento, as entidades e o DISPOSITIVO do registro."""
+        equipments = self.config_entry.data.get("equipments", [])
 
-        current_interval = self.config_entry.options.get("update_interval", 60)
+        if user_input is not None:
+            equip_uuid = user_input["equip_uuid"]
+
+            # 1. Localiza e remove o dispositivo do Device Registry do HA
+            dev_reg = dr.async_get(self.hass)
+            device = dev_reg.async_get_device(identifiers={(DOMAIN, equip_uuid)})
+            if device:
+                dev_reg.async_remove_device(device.id)
+
+            # 2. Atualiza a lista de equipamentos na configuração
+            new_equip_list = [e for e in equipments if e["uuid"] != equip_uuid]
+            new_data = {**self.config_entry.data, "equipments": new_equip_list}
+
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+
+            # 3. Força o reload para limpar o Entity Registry via __init__.py
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+            return self.async_create_entry(title="", data=self.config_entry.options)
+
+        equip_options = {e["uuid"]: f"{e['nome']} ({e['local']})" for e in equipments}
         return self.async_show_form(
-            step_id="change_interval",
+            step_id="remove_equipment",
             data_schema=vol.Schema({
-                vol.Optional("update_interval", default=current_interval): int,
+                vol.Required("equip_uuid"): vol.In(equip_options)
             })
         )
 
     async def async_step_add_more_equipment(self, user_input=None) -> FlowResult:
-        """Passo 1 de expansão: Dados do Equipamento."""
+        """Passo 1 Expansão."""
         if user_input is not None:
-            # Recupera o total de equipamentos para gerar ID correto
             current_equipments = self.config_entry.data.get("equipments", [])
             self.current_equipment = {
                 "id": len(current_equipments) + 1,
@@ -179,7 +198,7 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_add_more_sensor(self, user_input=None) -> FlowResult:
-        """Passo 2 de expansão: Loop de sensores e Gravação Final."""
+        """Passo 2 Expansão."""
         if user_input is not None:
             sensor_data = {
                 "id": len(self.current_equipment["sensors"]) + 1,
@@ -192,19 +211,12 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
             if user_input.get("add_another"):
                 return await self.async_step_add_more_sensor()
 
-            # GRAVAÇÃO E RECARREGAMENTO
             current_data = dict(self.config_entry.data)
             updated_equipments = list(current_data.get("equipments", []))
             updated_equipments.append(self.current_equipment)
 
-            new_data = {**current_data, "equipments": updated_equipments}
-
-            # Atualiza o dado permanentemente
-            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-
-            # Força o Home Assistant a ler os novos equipamentos imediatamente
+            self.hass.config_entries.async_update_entry(self.config_entry, data={**current_data, "equipments": updated_equipments})
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-
             return self.async_create_entry(title="", data=self.config_entry.options)
 
         entities = sorted(self.hass.states.async_entity_ids())
@@ -214,5 +226,18 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required("ha_entity_id"): vol.In(entities),
                 vol.Required("tipo"): vol.In(SENSOR_TYPES),
                 vol.Optional("add_another", default=False): bool,
+            })
+        )
+
+    async def async_step_change_interval(self, user_input=None) -> FlowResult:
+        """Ajusta o intervalo global."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        current_interval = self.config_entry.options.get("update_interval", 60)
+        return self.async_show_form(
+            step_id="change_interval",
+            data_schema=vol.Schema({
+                vol.Optional("update_interval", default=current_interval): int,
             })
         )
