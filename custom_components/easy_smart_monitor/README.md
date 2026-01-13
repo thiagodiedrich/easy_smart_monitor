@@ -1,126 +1,93 @@
-Documentação oficial para a versão estável.
+# 🧊 Easy Smart Monitor v1.0.13
 
-🧊 Easy Smart Monitor v1.0.12
-Integração profissional para monitoramento industrial de freezers, geladeiras e câmaras frias no Home Assistant.
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![version](https://img.shields.io/badge/version-1.0.13-green.svg)](https://github.com/thiagodiedrich/easy_smart_monitor)
+[![maintainer](https://img.shields.io/badge/maintainer-@thiagodiedrich-blue.svg)](https://github.com/thiagodiedrich)
 
-Desenvolvida com foco em integridade de dados, esta integração garante que nenhuma leitura crítica de temperatura ou energia seja perdida, mesmo que a conexão com a internet ou com o servidor API falhe.
+**Integração profissional para monitoramento industrial de freezers, geladeiras e câmaras frias no Home Assistant.**
 
-✨ Funcionalidades Principais
-🛡️ Persistência de Fila (Offline Queue):
+Desenvolvida com foco em **integridade de dados**, esta integração garante que nenhuma leitura crítica de temperatura ou energia seja perdida, mesmo em condições de instabilidade de rede.
 
-Se a API cair, os dados são salvos imediatamente no disco local do Home Assistant.
+## ✨ Funcionalidades Principais
 
-Assim que a conexão retorna, a integração envia todos os dados acumulados em lote (bulk), garantindo zero perda de histórico.
+* **🛡️ Persistência de Fila (Offline Queue):**
+    * Se a API cair, os dados são salvos imediatamente no disco local do Home Assistant.
+    * Recuperação automática assim que a conexão retorna.
+* **⚡ Gerenciamento Dinâmico de Equipamentos:**
+    * Adicione e remova equipamentos (Freezers/Câmaras) diretamente pelo menu de opções, sem precisar reinstalar a integração.
+    * **Novo (v1.0.13):** Remoção limpa de dispositivos. Ao excluir um equipamento, ele e todas as suas entidades somem do Home Assistant instantaneamente.
+* **⚙️ Controles de Hardware Nativos:**
+    * Switches para ativar/desativar equipamentos individualmente.
+    * Controle de sirene integrado com lógica local.
+* **📊 Diagnósticos em Tempo Real:**
+    * Sensores dedicados para monitorar a saúde da conexão e tamanho da fila.
 
-⚙️ Controles de Hardware Nativos:
+---
 
-Switches para ativar/desativar equipamentos individualmente.
+## 🛠️ Painel de Controle e Automação
 
-Controle de sirene integrado.
+Cada equipamento adicionado ao Easy Smart Monitor gera automaticamente um dispositivo com 4 controles vitais:
 
-⚡ Sincronização Inteligente:
+1.  **Switch Equipamento Ativo:**
+    * **ON:** Coleta e envia dados normalmente.
+    * **OFF:** Pausa a coleta imediatamente (útil para manutenção ou degelo).
+2.  **Switch Sirene Ativa:**
+    * Habilita ou desabilita a lógica de disparo de alarme sonoro para este equipamento.
+3.  **Number Intervalo de Coleta (120s Padrão):**
+    * Define a frequência de envio de dados. Padrão ajustado para evitar sobrecarga de banco de dados.
+4.  **Number Tempo Porta Aberta (120s Padrão):**
+    * Define o tempo limite para a porta ficar aberta antes de disparar o alarme.
 
-Envio otimizado para reduzir tráfego de rede.
+---
 
-Lógica de retry exponencial em caso de falhas de comunicação.
+## 🚀 Instalação
 
-📊 Diagnósticos em Tempo Real:
+### Pré-requisitos
+* Home Assistant Core 2024.1 ou superior.
+* Acesso à pasta `custom_components`.
 
-Sensores dedicados para monitorar a saúde da conexão, tamanho da fila de envio e data da última sincronização.
+### Passo a Passo
+1.  Baixe o código fonte da versão mais recente (v1.0.13).
+2.  Copie a pasta **`easy_smart_monitor`** para dentro do diretório `/config/custom_components/` do seu Home Assistant.
+3.  **Reinicie o Home Assistant**.
+4.  Vá em **Configurações > Dispositivos e Serviços > Adicionar Integração**.
+5.  Pesquise por **"Easy Smart Monitor"**.
+6.  Siga o fluxo de configuração visual.
 
-🛠️ Painel de Controle (Novidade v1.0.12)
-Cada equipamento adicionado ao Easy Smart Monitor ganha automaticamente uma área de configuração com 4 controles vitais:
+---
 
-Switch Equipamento Ativo:
+## ⚙️ Gerenciamento (Menu de Opções)
 
-ON: Coleta e envia dados normalmente.
+Para adicionar novos freezers ou remover sensores, clique em **Configurar** no card da integração:
 
-OFF: Pausa a coleta imediatamente (útil para manutenção ou degelo).
+1.  **Gerenciar Equipamentos:**
+    * Adicionar Novo: Cria um novo dispositivo.
+    * Remover: Exclui o dispositivo e limpa o registro do Home Assistant.
+2.  **Gerenciar Sensores:**
+    * Vincule sensores existentes do HA (Zigbee, Tuya, ESPHome) ao equipamento.
+3.  **Intervalo de Sincronia (API):**
+    * Ajuste a frequência com que o pacote de dados acumulados é enviado ao servidor.
 
-Switch Sirene Ativa:
+---
 
-Habilita ou desabilita a lógica de disparo de alarme sonoro para este equipamento.
+## 📝 Changelog
 
-Number Intervalo de Coleta (segundos):
+### v1.0.13 (Estável)
+* [x] **Fix de Persistência:** Resolvido problema onde equipamentos sumiam após reiniciar o HA.
+* [x] **Limpeza de Registro:** Ao remover um equipamento ou sensor, ele agora é deletado fisicamente do `device_registry` e `entity_registry`.
+* [x] **Fluxo Atômico:** Criação de equipamento e sensores num passo unificado para evitar recarregamentos desnecessários.
 
-Define a frequência mínima de envio de dados. Evita que sensores muito ruidosos lotem a fila desnecessariamente.
+### v1.0.12
+* [x] Estabilização do Config Flow com seletores visuais.
+* [x] Renomeação do domínio para `easy_smart_monitor`.
+* [x] Ajuste de intervalos padrão (120s) para performance.
 
-Number Tempo Porta Aberta (segundos):
+---
 
-Define quanto tempo a porta pode ficar aberta antes de o sensor binary_sensor.sirene disparar o alerta.
+## 👤 Autor
 
-🚀 Instalação
-Pré-requisitos
-Home Assistant Core 2024.1 ou superior.
+* **Desenvolvedor:** Thiago Diedrich ([@thiagodiedrich](https://github.com/thiagodiedrich))
+* **Licença:** MIT
 
-Acesso à pasta custom_components.
-
-Passo a Passo
-Baixe o código fonte da versão mais recente.
-
-Copie a pasta easy_smart_monitor para dentro do diretório /config/custom_components/ do seu Home Assistant.
-
-Reinicie o Home Assistant.
-
-Após reiniciar, vá em:
-
-Configurações > Dispositivos e Serviços > Adicionar Integração.
-
-Pesquise por "Easy Smart Monitor".
-
-Siga o fluxo de configuração visual.
-
-⚙️ Configuração
-1. Conexão
-Insira a URL do seu servidor API (Ex: http://192.168.1.100:5000) e as credenciais de autenticação.
-
-2. Cadastro de Equipamentos
-Defina o nome (ex: "Freezer Carnes") e o local (ex: "Cozinha").
-
-3. Vínculo de Sensores (Seletores Visuais)
-A partir da versão 1.0.11+, você não precisa digitar os IDs. Utilize os menus suspensos para selecionar as entidades do Home Assistant (Zigbee, ESPHome, Tuya, etc.) que correspondem a:
-
-Temperatura
-
-Energia (Watts)
-
-Tensão (Volts)
-
-Corrente (Amperes)
-
-Porta (Contato Magnético)
-
-📊 Arquitetura de Dados
-Snippet de código
-
-graph LR
-    A[Sensores HA] -->|Leitura| B{Filtro & Switch}
-    B -->|Ativo| C[Fila em Disco .json]
-    C -->|Coordenador| D{API Online?}
-    D -->|Sim| E[Servidor Easy Smart]
-    D -->|Não| C
-Persistência: Os dados são gravados atomicamente em /config/.storage/easy_smart_monitor_queue.json.
-
-Protocolo: HTTP/POST com payload JSON em lote.
-
-📝 Changelog Recente
-v1.0.12 (Estável)
-[x] Estabilização do Config Flow com seletores visuais.
-
-[x] Renomeação do domínio para easy_smart_monitor.
-
-[x] Desativação do modo de teste para produção.
-
-v1.0.11
-[x] Adição dos controles Switch e Number.
-
-[x] Correção do erro de persistência em disco.
-
-[x] Tradução completa PT-BR.
-
-👤 Autor e Suporte
-Desenvolvedor: Thiago Diedrich (@thiagodiedrich)
-
-Licença: MIT
-
-Easy Smart Monitor - Inteligência Industrial ao seu alcance.
+---
+*Easy Smart Monitor - Inteligência Industrial ao seu alcance.*

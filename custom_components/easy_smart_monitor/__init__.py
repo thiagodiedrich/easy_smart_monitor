@@ -1,20 +1,27 @@
+"""
+Inicialização da integração Easy Smart Monitor.
+Gerencia a configuração, migração de dados e ciclo de vida das plataformas.
+"""
 import logging
 import asyncio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import entity_registry as er
+from homeassistant.const import CONF_HOST, CONF_USERNAME, CONF_PASSWORD
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.const import Platform
 
 from .const import (
     DOMAIN,
-    PLATFORMS,
     CONF_API_HOST,
-    CONF_USERNAME,
-    CONF_PASSWORD,
+    CONF_USERNAME as CONF_USER_KEY,
+    CONF_PASSWORD as CONF_PASS_KEY,
+    CONF_UPDATE_INTERVAL,
     CONF_EQUIPMENTS,
-    TEST_MODE
+    DEFAULT_UPDATE_INTERVAL,
+    PLATFORMS,
+    TEST_MODE,
+    MANUFACTURER,
+    VERSION
 )
 from .client import EasySmartClient
 from .coordinator import EasySmartCoordinator
@@ -23,116 +30,122 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """
-    Configura a integração Easy Smart Monitor v1.0.11.
-    Versão robusta com proteção contra valores nulos (NoneType).
+    Configura a integração a partir de uma entrada de configuração.
+    Esta função é chamada na inicialização do HA ou quando o usuário recarrega a integração.
     """
-    _LOGGER.info("Iniciando Easy Smart Monitor v1.0.12")
+    hass.data.setdefault(DOMAIN, {})
 
-    # 1. Recuperação Segura de Credenciais (Resolve o erro do rstrip)
-    # Tenta buscar pelas constantes ou pelas strings diretas caso o entry seja antigo
-    api_host = entry.data.get(CONF_API_HOST) or entry.data.get("api_host")
-    username = entry.data.get(CONF_USERNAME) or entry.data.get("username")
-    password = entry.data.get(CONF_PASSWORD) or entry.data.get("password")
+    _LOGGER.debug("Iniciando setup da entrada: %s (v%s)", entry.title, VERSION)
 
-    # Validação preventiva para evitar quebra no client.py
-    if api_host is None:
-        _LOGGER.error("Falha ao iniciar: Host da API não encontrado nos dados da configuração")
-        return False
+    # -------------------------------------------------------------------------
+    # 1. Recuperação Robusta de Credenciais (Mantido)
+    # -------------------------------------------------------------------------
+    api_host = entry.data.get(CONF_API_HOST)
+    username = entry.data.get(CONF_USER_KEY)
+    password = entry.data.get(CONF_PASS_KEY)
 
-    # 2. Inicialização do Cliente e Sessão
-    session = async_get_clientsession(hass)
-
-    try:
-        client = EasySmartClient(
-            host=str(api_host), # Força conversão para string
-            username=str(username or ""),
-            password=str(password or ""),
-            session=session,
-            hass=hass
+    # Fallback: Se não encontrar, tenta chaves antigas ou genéricas
+    if not api_host:
+        api_host = (
+                entry.data.get("host") or
+                entry.data.get("api_url") or
+                entry.data.get("server")
         )
 
-        # 3. Carga da Fila de Persistência
-        # Carregamos do disco antes de qualquer refresh para garantir a telemetria offline
-        await client.load_queue_from_disk()
+    if not username:
+        username = entry.data.get("user") or entry.data.get(CONF_USERNAME)
 
-    except Exception as err:
-        _LOGGER.error("Erro ao inicializar o cliente Easy Smart: %s", err)
-        raise ConfigEntryNotReady from err
+    if not password:
+        password = entry.data.get("pass") or entry.data.get(CONF_PASSWORD)
 
-    # 4. Configuração do Coordenador
-    # Busca o intervalo das opções ou usa o padrão de 60 segundos
-    update_interval = entry.options.get("update_interval", 60)
+    # -------------------------------------------------------------------------
+    # 2. Validação Crítica
+    # -------------------------------------------------------------------------
+    if not api_host:
+        _LOGGER.error(
+            "CRÍTICO: Host da API não encontrado. Dados disponíveis: %s",
+            entry.data.keys()
+        )
+        return False
+
+    api_host = str(api_host).rstrip("/")
+
+    # -------------------------------------------------------------------------
+    # 3. Inicialização do Cliente API
+    # -------------------------------------------------------------------------
+    session = async_get_clientsession(hass)
+
+    if TEST_MODE and (not username or not password):
+        _LOGGER.warning("Modo Teste: Usando credenciais padrão.")
+        username = username or "admin_teste"
+        password = password or "senha_teste"
+
+    client = EasySmartClient(api_host, username, password, session, hass)
+
+    # -------------------------------------------------------------------------
+    # 4. Inicialização do Coordinator
+    # -------------------------------------------------------------------------
+    update_interval = entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+
+    _LOGGER.debug("Inicializando Coordinator com intervalo de %s segundos.", update_interval)
+
     coordinator = EasySmartCoordinator(hass, client, update_interval)
 
-    # Refresh inicial (não trava o boot se falhar)
+    # Primeira sincronização
     try:
         await coordinator.async_config_entry_first_refresh()
-    except Exception as err:
-        _LOGGER.warning("API offline no boot. As entidades serão criadas, mas sem dados iniciais: %s", err)
+    except Exception as e:
+        _LOGGER.warning("Falha na primeira sincronização (API Offline?): %s", e)
 
-    # 5. Armazenamento Centralizado
-    hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # 6. Limpeza de Entidades Obsoletas
-    # Garante que entidades removidas no Config Flow sumam do Dashboard
-    await async_cleanup_orphan_entities(hass, entry)
+    # -------------------------------------------------------------------------
+    # 5. REGISTRO EXPLÍCITO DE DISPOSITIVOS (Força Criação Visual)
+    # -------------------------------------------------------------------------
+    dev_registry = dr.async_get(hass)
 
-    # 7. Ativação das Plataformas (Switch, Number, Sensor, Binary Sensor)
+    # Agora podemos confiar em entry.data, pois o config_flow usa deepcopy+update_entry
+    equipments = entry.data.get(CONF_EQUIPMENTS, [])
+
+    if equipments:
+        _LOGGER.debug("Processando %s equipamentos para registro.", len(equipments))
+        for equip in equipments:
+            try:
+                dev_registry.async_get_or_create(
+                    config_entry_id=entry.entry_id,
+                    identifiers={(DOMAIN, str(equip["uuid"]))},
+                    name=equip["nome"],
+                    manufacturer=MANUFACTURER,
+                    model=f"Monitor Industrial v{VERSION}",
+                    suggested_area=equip.get("local"),
+                    configuration_url=api_host
+                )
+            except Exception as e:
+                _LOGGER.error("Erro ao registrar dispositivo %s: %s", equip.get("nome"), e)
+    else:
+        _LOGGER.debug("Nenhum equipamento encontrado na configuração.")
+
+    # -------------------------------------------------------------------------
+    # 6. Carregamento das Plataformas
+    # -------------------------------------------------------------------------
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Listener para recarregar se as opções mudarem
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    # -------------------------------------------------------------------------
+    # 7. Listener de Atualização
+    # -------------------------------------------------------------------------
+    entry.async_on_unload(entry.add_update_listener(async_update_options))
 
+    _LOGGER.info("Easy Smart Monitor iniciado com sucesso.")
     return True
 
-async def async_cleanup_orphan_entities(hass: HomeAssistant, entry: ConfigEntry):
-    """Varre o registro e remove entidades que não existem mais no arquivo de equipamentos."""
-    entity_reg = er.async_get(hass)
-    entries_in_registry = er.async_entries_for_config_entry(entity_reg, entry.entry_id)
-
-    valid_unique_ids = []
-    # Busca equipamentos da chave nova ou antiga
-    equipments = entry.data.get(CONF_EQUIPMENTS) or entry.data.get("equipments", [])
-
-    for equip in equipments:
-        uuid = equip["uuid"]
-
-        # Unique IDs dos Controles v1.0.11
-        valid_unique_ids.append(f"esm_sw_ativo_{uuid}")
-        valid_unique_ids.append(f"esm_sw_sirene_ativa_{uuid}")
-        valid_unique_ids.append(f"esm_num_intervalo_coleta_{uuid}")
-        valid_unique_ids.append(f"esm_num_tempo_porta_{uuid}")
-
-        # Unique IDs de Diagnóstico
-        valid_unique_ids.append(f"esm_diag_conexao_{uuid}")
-        valid_unique_ids.append(f"esm_diag_sincro_{uuid}")
-
-        # Unique IDs de Telemetria e Sensores
-        for sensor in equip.get("sensors", []):
-            s_uuid = sensor["uuid"]
-            valid_unique_ids.append(f"esm_{s_uuid}")
-            if sensor.get("tipo") == "porta":
-                valid_unique_ids.append(f"esm_porta_{s_uuid}")
-                valid_unique_ids.append(f"esm_sirene_{uuid}")
-
-    # Remove o que não está na lista de IDs válidos
-    for entity in entries_in_registry:
-        if entity.unique_id not in valid_unique_ids:
-            _LOGGER.info("Removendo entidade órfã: %s", entity.entity_id)
-            entity_reg.async_remove(entity.entity_id)
-
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Recarrega a integração quando as opções são alteradas."""
-    await hass.config_entries.async_reload(entry.entry_id)
-
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Descarrega a integração e limpa a memória."""
-    _LOGGER.info("Descarregando integração Easy Smart Monitor")
-
+    """Descarrega a integração."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
-
     return unload_ok
+
+async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Recarrega a integração ao mudar opções."""
+    _LOGGER.info("Opções alteradas. Recarregando integração...")
+    await hass.config_entries.async_reload(entry.entry_id)

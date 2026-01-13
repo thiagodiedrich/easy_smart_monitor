@@ -1,131 +1,124 @@
 {
   "config": {
+    "abort": {
+      "already_configured": "Device is already configured"
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to server",
+      "invalid_auth": "Invalid username or password",
+      "unknown": "Unexpected error"
+    },
     "step": {
       "user": {
-        "title": "Easy Smart Monitor: Authentication",
-        "description": "Configure access to the central API to send refrigeration metrics.",
+        "title": "Connect to Easy Smart Server",
+        "description": "Enter API credentials to start.",
         "data": {
-          "api_host": "API Server (Ex: http://192.168.1.50:5000)",
-          "username": "API Username",
-          "password": "Access Password"
-        }
-      },
-      "management": {
-        "title": "Asset Dashboard",
-        "description": "Manage your equipment fleet before finishing the installation.",
-        "menu_options": {
-          "add_equipment": "Register New Equipment",
-          "finish": "Finish Configuration"
+          "api_host": "API Host (URL)",
+          "username": "Username",
+          "password": "Password"
         }
       },
       "add_equipment": {
-        "title": "Asset Data",
-        "description": "Identify the equipment (Ex: Freezer 01).",
-        "data": {
-          "nome": "Equipment Name",
-          "local": "Location (Ex: Kitchen)",
-          "intervalo_fila": "Local Sync (Seconds)"
-        }
-      },
-      "add_sensor": {
-        "title": "Link Sensors",
-        "description": "Select a Home Assistant entity to monitor.",
-        "data": {
-          "ha_entity_id": "HA Entity",
-          "tipo": "Measurement Type",
-          "add_another": "Link another sensor to this equipment?"
-        }
-      }
-    },
-    "error": {
-      "invalid_auth": "Invalid credentials. Please check username and password.",
-      "cannot_connect": "Unable to connect to the API host.",
-      "unknown": "An unexpected error occurred during configuration."
-    },
-    "abort": {
-      "no_equipments": "Operation canceled: no equipment was registered.",
-      "already_configured": "This service is already configured in this Home Assistant."
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Easy Smart Settings",
-        "description": "What would you like to do in the integration?",
-        "menu_options": {
-          "manage_sensors": "Manage Sensors",
-          "add_more_equipment": "Add New Equipment",
-          "remove_equipment": "Remove Equipment",
-          "change_interval": "Adjust Sync Interval"
-        }
-      },
-      "manage_sensors": {
-        "title": "Select Equipment",
-        "description": "Choose which equipment you want to edit sensors for.",
-        "data": {
-          "equip_uuid": "Equipment"
-        }
-      },
-      "sensor_menu": {
-        "title": "Sensor Options",
-        "description": "What do you want to do with the sensors for this equipment?",
-        "menu_options": {
-          "add_sensor_to_equip": "Add New Sensor",
-          "remove_sensor_from_equip": "Remove Existing Sensor"
-        }
-      },
-      "add_sensor_to_equip": {
-        "title": "Add New Sensor",
-        "description": "Link a new entity to this equipment.",
-        "data": {
-          "ha_entity_id": "HA Entity",
-          "tipo": "Measurement Type"
-        }
-      },
-      "remove_sensor_from_equip": {
-        "title": "Remove Sensor",
-        "description": "Select the sensor you want to permanently unbind.",
-        "data": {
-          "sensor_uuid": "Select Sensor"
-        }
-      },
-      "remove_equipment": {
-        "title": "Delete Equipment",
-        "description": "WARNING: This will remove the device and all its entities from Home Assistant.",
-        "data": {
-          "equip_uuid": "Select Equipment"
-        }
-      },
-      "add_more_equipment": {
-        "title": "New Equipment",
-        "description": "Enter the information for the new asset.",
+        "title": "Add Equipment",
+        "description": "Define equipment data (Freezer, Cold Room, etc).",
         "data": {
           "nome": "Equipment Name",
           "local": "Location"
         }
       },
-      "change_interval": {
-        "title": "Sync Interval",
-        "description": "Queue dispatch time to the API.",
+      "add_sensor": {
+        "title": "Link Sensors",
+        "description": "Select the corresponding Home Assistant sensor.",
         "data": {
-          "update_interval": "Interval (Seconds)"
+          "ha_entity_id": "Sensor Entity (HA)",
+          "tipo": "Measure Type",
+          "add_another": "Link another sensor to this equipment?"
+        }
+      },
+      "post_add_menu": {
+        "title": "Next Steps",
+        "description": "Equipment saved. What would you like to do now?",
+        "menu_options": {
+          "add_equipment": "Add Another Equipment",
+          "finalizar": "Finish Configuration"
         }
       }
-    },
-    "abort": {
-      "no_sensors_to_remove": "This equipment has no sensors to remove."
     }
   },
-  "selector": {
-    "tipo": {
-      "options": {
-        "temperatura": "Temperature (°C)",
-        "porta": "Door Status (Open/Closed)",
-        "energia": "Active Power (W)",
-        "tensao": "Voltage (V)",
-        "corrente": "Current (A)",
-        "humidade": "Relative Humidity (%)",
-        "sirene": "Alert Siren (Safety)"
+  "options": {
+    "step": {
+      "init": {
+        "title": "Easy Smart Monitor Management",
+        "menu_options": {
+          "change_interval": "Sync Interval (API)",
+          "equipments_menu": "Manage Equipments",
+          "manage_sensors": "Manage Equipment Sensors"
+        }
+      },
+      "equipments_menu": {
+        "title": "Manage Equipments",
+        "menu_options": {
+          "add_more_equipment": "Add New Equipment",
+          "remove_equipment": "Remove Equipment",
+          "init": "Back"
+        }
+      },
+      "new_equip_decision": {
+        "title": "Equipment Created",
+        "description": "The equipment has been pre-configured. What do you want to do now?",
+        "menu_options": {
+          "add_sensor_to_equip": "Add Sensors Now",
+          "save_new_equip": "Save and Exit (No Sensors)"
+        }
+      },
+      "change_interval": {
+        "title": "Fine Tuning",
+        "data": {
+          "update_interval": "Sync Interval (seconds)"
+        }
+      },
+      "manage_sensors": {
+        "title": "Select Equipment",
+        "data": {
+          "equip_uuid": "Equipment"
+        }
+      },
+      "sensor_action": {
+        "title": "Sensor Actions",
+        "description": "What do you want to do with this equipment?",
+        "menu_options": {
+          "add_sensor_to_equip": "Add New Sensor",
+          "remove_sensor_from_equip": "Remove Existing Sensor",
+          "init": "Back to Main Menu"
+        }
+      },
+      "add_sensor_to_equip": {
+        "title": "Add Sensor",
+        "data": {
+          "ha_entity_id": "Home Assistant Entity",
+          "tipo": "Sensor Type"
+        }
+      },
+      "remove_sensor_from_equip": {
+        "title": "Remove Sensor",
+        "data": {
+          "sensor_uuid": "Select sensor to remove"
+        }
+      },
+      "add_more_equipment": {
+        "title": "New Equipment",
+        "description": "Enter new equipment details.",
+        "data": {
+          "nome": "Name",
+          "local": "Location"
+        }
+      },
+      "remove_equipment": {
+        "title": "Delete Equipment",
+        "description": "WARNING: This action cannot be undone.",
+        "data": {
+          "equip_uuid": "Select Equipment"
+        }
       }
     }
   }

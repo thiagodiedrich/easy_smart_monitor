@@ -11,7 +11,7 @@ from homeassistant.const import (
 # Identificação da Integração
 DOMAIN = "easy_smart_monitor"
 NAME = "Easy Smart Monitor"
-VERSION = "1.0.12"
+VERSION = "1.0.13"
 MANUFACTURER = "Easy Smart"
 
 # Modo de Operação
@@ -55,7 +55,7 @@ CONF_SIRENE_ATIVA = "sirene_ativa"
 CONF_INTERVALO_COLETA = "intervalo_coleta"
 CONF_TEMPO_PORTA = "tempo_porta"
 
-DEFAULT_INTERVALO_COLETA = 10
+DEFAULT_INTERVALO_COLETA = 120
 DEFAULT_TEMPO_PORTA_ABERTA = 120
 DEFAULT_EQUIPAMENTO_ATIVO = True
 DEFAULT_SIRENE_ATIVA = True

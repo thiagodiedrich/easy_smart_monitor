@@ -48,13 +48,27 @@
   "options": {
     "step": {
       "init": {
-        "title": "Gerenciamento Easy Smart",
-        "description": "Escolha uma ação:",
+        "title": "Gerenciamento Easy Smart Monitor",
         "menu_options": {
-          "change_interval": "Alterar Intervalo de Sincronia",
-          "manage_sensors": "Gerenciar Sensores de um Equipamento",
+          "change_interval": "Intervalo de Sincronia (API)",
+          "equipments_menu": "Gerenciar Equipamentos",
+          "manage_sensors": "Gerenciar Sensores de um Equipamento"
+        }
+      },
+      "equipments_menu": {
+        "title": "Gerenciar Equipamentos",
+        "menu_options": {
           "add_more_equipment": "Adicionar Novo Equipamento",
-          "remove_equipment": "Remover Equipamento"
+          "remove_equipment": "Remover Equipamento",
+          "init": "Voltar"
+        }
+      },
+      "new_equip_decision": {
+        "title": "Equipamento Criado",
+        "description": "O equipamento foi pré-configurado. O que deseja fazer agora?",
+        "menu_options": {
+          "add_sensor_to_equip": "Adicionar Sensores Agora",
+          "save_new_equip": "Salvar e Sair (Sem Sensores)"
         }
       },
       "change_interval": {
@@ -65,7 +79,6 @@
       },
       "manage_sensors": {
         "title": "Selecionar Equipamento",
-        "description": "Qual equipamento você deseja editar?",
         "data": {
           "equip_uuid": "Equipamento"
         }
