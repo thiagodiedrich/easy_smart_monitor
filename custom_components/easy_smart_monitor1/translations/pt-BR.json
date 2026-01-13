@@ -50,45 +50,70 @@
   "options": {
     "step": {
       "init": {
-        "title": "Gestão e Ajustes",
-        "description": "O que você deseja fazer na integração Easy Smart?",
+        "title": "Configurações Easy Smart",
+        "description": "O que você deseja fazer na integração?",
         "menu_options": {
-          "add_more_equipment": "Adicionar Novo Equipamento (Expansão)",
-          "remove_equipment": "Remover Equipamento Existente",
+          "manage_sensors": "Gerenciar Sensores",
+          "add_more_equipment": "Adicionar Novo Equipamento",
+          "remove_equipment": "Remover Equipamento",
           "change_interval": "Ajustar Intervalo de Sincronização"
         }
       },
+      "manage_sensors": {
+        "title": "Selecionar Equipamento",
+        "description": "Escolha qual equipamento deseja editar os sensores.",
+        "data": {
+          "equip_uuid": "Equipamento"
+        }
+      },
+      "sensor_menu": {
+        "title": "Opções de Sensor",
+        "description": "O que deseja fazer com os sensores deste equipamento?",
+        "menu_options": {
+          "add_sensor_to_equip": "Adicionar Novo Sensor",
+          "remove_sensor_from_equip": "Remover Sensor Existente"
+        }
+      },
+      "add_sensor_to_equip": {
+        "title": "Adicionar Novo Sensor",
+        "description": "Vincule uma nova entidade a este equipamento.",
+        "data": {
+          "ha_entity_id": "Entidade do HA",
+          "tipo": "Tipo de Grandeza"
+        }
+      },
+      "remove_sensor_from_equip": {
+        "title": "Remover Sensor",
+        "description": "Selecione o sensor que deseja desvincular permanentemente.",
+        "data": {
+          "sensor_uuid": "Selecionar Sensor"
+        }
+      },
+      "remove_equipment": {
+        "title": "Excluir Equipamento",
+        "description": "AVISO: Isso removerá o dispositivo e todas as suas entidades do Home Assistant.",
+        "data": {
+          "equip_uuid": "Selecionar Equipamento"
+        }
+      },
       "add_more_equipment": {
-        "title": "Novo Ativo",
-        "description": "Insira as informações do novo equipamento.",
+        "title": "Novo Equipamento",
+        "description": "Insira as informações do novo ativo.",
         "data": {
           "nome": "Nome do Equipamento",
           "local": "Localização"
         }
       },
-      "add_more_sensor": {
-        "title": "Configurar Sensores",
-        "description": "Vincule os sensores para o novo equipamento.",
-        "data": {
-          "ha_entity_id": "Entidade do HA",
-          "tipo": "Tipo de Grandeza",
-          "add_another": "Adicionar mais sensores?"
-        }
-      },
-      "remove_equipment": {
-        "title": "Excluir Equipamento",
-        "description": "AVISO: Isso removerá o dispositivo e todas as suas entidades permanentemente.",
-        "data": {
-          "equip_uuid": "Selecione o Equipamento"
-        }
-      },
       "change_interval": {
-        "title": "Intervalo Global",
-        "description": "Ajuste o tempo de despacho da fila para a API.",
+        "title": "Intervalo de Sincronização",
+        "description": "Tempo de despacho da fila para a API.",
         "data": {
-          "update_interval": "Intervalo de envio (Segundos)"
+          "update_interval": "Intervalo (Segundos)"
         }
       }
+    },
+    "abort": {
+      "no_sensors_to_remove": "Este equipamento não possui sensores para remover."
     }
   },
   "selector": {

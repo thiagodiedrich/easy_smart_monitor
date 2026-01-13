@@ -3,15 +3,15 @@
     "step": {
       "user": {
         "title": "Easy Smart Monitor: Authentication",
-        "description": "Configure the API access to send your refrigeration metrics.",
+        "description": "Configure access to the central API to send refrigeration metrics.",
         "data": {
-          "api_host": "API Server Host (Ex: http://192.168.1.50:5000)",
+          "api_host": "API Server (Ex: http://192.168.1.50:5000)",
           "username": "API Username",
           "password": "Access Password"
         }
       },
       "management": {
-        "title": "Asset Management",
+        "title": "Asset Dashboard",
         "description": "Manage your equipment fleet before finishing the installation.",
         "menu_options": {
           "add_equipment": "Register New Equipment",
@@ -24,7 +24,7 @@
         "data": {
           "nome": "Equipment Name",
           "local": "Location (Ex: Kitchen)",
-          "intervalo_fila": "Sync Interval (Seconds)"
+          "intervalo_fila": "Local Sync (Seconds)"
         }
       },
       "add_sensor": {
@@ -50,45 +50,70 @@
   "options": {
     "step": {
       "init": {
-        "title": "Management & Settings",
-        "description": "What would you like to do with the Easy Smart integration?",
+        "title": "Easy Smart Settings",
+        "description": "What would you like to do in the integration?",
         "menu_options": {
-          "add_more_equipment": "Add New Equipment (Expansion)",
-          "remove_equipment": "Remove Existing Equipment",
+          "manage_sensors": "Manage Sensors",
+          "add_more_equipment": "Add New Equipment",
+          "remove_equipment": "Remove Equipment",
           "change_interval": "Adjust Sync Interval"
         }
       },
+      "manage_sensors": {
+        "title": "Select Equipment",
+        "description": "Choose which equipment you want to edit sensors for.",
+        "data": {
+          "equip_uuid": "Equipment"
+        }
+      },
+      "sensor_menu": {
+        "title": "Sensor Options",
+        "description": "What do you want to do with the sensors for this equipment?",
+        "menu_options": {
+          "add_sensor_to_equip": "Add New Sensor",
+          "remove_sensor_from_equip": "Remove Existing Sensor"
+        }
+      },
+      "add_sensor_to_equip": {
+        "title": "Add New Sensor",
+        "description": "Link a new entity to this equipment.",
+        "data": {
+          "ha_entity_id": "HA Entity",
+          "tipo": "Measurement Type"
+        }
+      },
+      "remove_sensor_from_equip": {
+        "title": "Remove Sensor",
+        "description": "Select the sensor you want to permanently unbind.",
+        "data": {
+          "sensor_uuid": "Select Sensor"
+        }
+      },
+      "remove_equipment": {
+        "title": "Delete Equipment",
+        "description": "WARNING: This will remove the device and all its entities from Home Assistant.",
+        "data": {
+          "equip_uuid": "Select Equipment"
+        }
+      },
       "add_more_equipment": {
-        "title": "New Asset",
-        "description": "Enter the information for the new equipment.",
+        "title": "New Equipment",
+        "description": "Enter the information for the new asset.",
         "data": {
           "nome": "Equipment Name",
           "local": "Location"
         }
       },
-      "add_more_sensor": {
-        "title": "Configure Sensors",
-        "description": "Link sensors to the new equipment.",
-        "data": {
-          "ha_entity_id": "HA Entity",
-          "tipo": "Measurement Type",
-          "add_another": "Add more sensors?"
-        }
-      },
-      "remove_equipment": {
-        "title": "Delete Equipment",
-        "description": "WARNING: This will permanently remove the device and all its entities.",
-        "data": {
-          "equip_uuid": "Select Equipment"
-        }
-      },
       "change_interval": {
-        "title": "Global Interval",
-        "description": "Adjust the queue dispatch time to the API.",
+        "title": "Sync Interval",
+        "description": "Queue dispatch time to the API.",
         "data": {
-          "update_interval": "Sync Interval (Seconds)"
+          "update_interval": "Interval (Seconds)"
         }
       }
+    },
+    "abort": {
+      "no_sensors_to_remove": "This equipment has no sensors to remove."
     }
   },
   "selector": {

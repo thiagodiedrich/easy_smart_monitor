@@ -1,5 +1,4 @@
 import logging
-import asyncio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -18,69 +17,73 @@ from .coordinator import EasySmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# Plataformas gerenciadas pela integração
+# Plataformas suportadas
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Configura o Easy Smart Monitor e limpa dispositivos removidos."""
+    """Configura a integração a partir de uma entrada de configuração."""
 
-    _LOGGER.debug("Iniciando setup da integração %s", DOMAIN)
+    _LOGGER.debug("Iniciando setup da integração %s (v1.0.9)", DOMAIN)
 
-    # 1. LIMPEZA DE ENTIDADES ÓRFÃS
-    # Este bloco garante que, se um equipamento foi removido via menu 'Configurar',
-    # suas entidades sejam deletadas do registro interno do Home Assistant.
-    ent_reg = er.async_get(hass)
-    entities_in_registry = er.async_entries_for_config_entry(ent_reg, entry.entry_id)
+    # 1. LIMPEZA DE ENTIDADES ÓRFÃS (Crucial para a v1.0.9)
+    # Sempre que o config_flow adiciona ou remove um sensor, o reload chama este código.
+    entity_reg = er.async_get(hass)
+    entities_in_registry = er.async_entries_for_config_entry(entity_reg, entry.entry_id)
 
-    # Mapeia todos os UUIDs de sensores que deveriam existir atualmente
+    # Criamos uma lista de todos os unique_ids que DEVERIAM existir conforme o JSON atual
     valid_unique_ids = []
     for equip in entry.data.get("equipments", []):
         for sensor in equip.get("sensors", []):
-            # Formato do unique_id definido no sensor.py
+            # Unique IDs conforme definidos no sensor.py e binary_sensor.py
             valid_unique_ids.append(f"esm_{sensor['uuid']}")
-            if sensor["tipo"] == "sirene":
+            if sensor.get("tipo") == "sirene":
                 valid_unique_ids.append(f"esm_siren_{sensor['uuid']}")
 
-    # Remove do registro o que não está mais na configuração
+    # Removemos do Home Assistant qualquer entidade que não esteja mais no nosso JSON
     for entity in entities_in_registry:
         if entity.unique_id not in valid_unique_ids:
-            _LOGGER.info("Removendo entidade órfã do registro: %s", entity.entity_id)
-            ent_reg.async_remove(entity.entity_id)
+            _LOGGER.info("Removendo entidade órfã: %s", entity.entity_id)
+            entity_reg.async_remove(entity.entity_id)
 
-    # 2. INICIALIZAÇÃO DO CLIENTE E COORDENADOR
+    # 2. INICIALIZAÇÃO DO CLIENTE COM PROTEÇÃO CONTRA KEYERROR
+    # Usamos .get() com valores padrão para evitar travamentos se o JSON estiver incompleto
+    api_host = entry.data.get(CONF_API_HOST, "http://localhost")
+    username = entry.data.get(CONF_USERNAME, "admin")
+    password = entry.data.get(CONF_PASSWORD, "")
+
     session = async_get_clientsession(hass)
-
     client = EasySmartClient(
-        host=entry.data[CONF_API_HOST],
-        username=entry.data[CONF_USERNAME],
-        password=entry.data[CONF_PASSWORD],
+        host=api_host,
+        username=username,
+        password=password,
         session=session,
         hass=hass
     )
 
-    # Carrega dados salvos em disco (.storage)
+    # Carrega a fila local do disco (resiliência de dados)
     await client.load_queue_from_disk()
 
-    # Autenticação inicial (respeita o TEST_MODE)
+    # Tenta autenticar (respeitando o modo de teste)
     if not await client.authenticate():
         if not TEST_MODE:
-            _LOGGER.warning("Falha na autenticação inicial da API. Tentando em segundo plano.")
+            _LOGGER.warning("Não foi possível autenticar na API Easy Smart. Operando em modo offline.")
 
-    # Configuração do Coordenador de Dados
+    # 3. CONFIGURAÇÃO DO COORDENADOR
+    # O intervalo pode ser ajustado nas opções da integração
     update_interval = entry.options.get("update_interval", 60)
     coordinator = EasySmartCoordinator(hass, client, update_interval)
 
-    # Primeiro refresh para popular as entidades
+    # Realiza o primeiro refresh de dados
     await coordinator.async_config_entry_first_refresh()
 
-    # Armazena o coordenador globalmente
+    # Armazena o coordenador para acesso das plataformas (sensor/binary_sensor)
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # 3. CARREGAMENTO DAS PLATAFORMAS (sensor.py e binary_sensor.py)
+    # 4. CARREGA AS PLATAFORMAS (sensor.py e binary_sensor.py)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Registra listener para mudanças nas opções (configurar)
+    # Adiciona listener para atualizações de opções (botão configurar)
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
     return True
@@ -92,9 +95,7 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Descarrega a integração e limpa a memória."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
-        _LOGGER.debug("Integração %s descarregada com sucesso.", DOMAIN)
-
+        _LOGGER.debug("Integração %s descarregada.", DOMAIN)
     return unload_ok

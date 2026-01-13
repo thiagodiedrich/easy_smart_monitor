@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Optional
 
 from homeassistant.components.sensor import (
     SensorEntity,
@@ -18,19 +18,15 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback
-) -> None:
-    """Configura as entidades de sensor baseadas nos equipamentos cadastrados."""
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+    """Configura as entidades de sensor numérico e de status."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     equipments = entry.data.get("equipments", [])
 
     entities = []
     for equip in equipments:
         for sensor_cfg in equip.get("sensors", []):
-            # Apenas sensores numéricos (Sirene e Porta vão para binary_sensor.py)
+            # Filtra sensores que não são binários (porta/sirene ficam no binary_sensor.py)
             if sensor_cfg.get("tipo") not in ["sirene", "porta"]:
                 entities.append(EasySmartMonitorEntity(coordinator, equip, sensor_cfg))
 
@@ -38,18 +34,19 @@ async def async_setup_entry(
         async_add_entities(entities, update_before_add=True)
 
 class EasySmartMonitorEntity(CoordinatorEntity, SensorEntity):
-    """Representa um sensor de telemetria vinculado a um equipamento."""
+    """Entidade de monitoramento com suporte a dados numéricos e strings de status."""
 
     def __init__(self, coordinator, equip, sensor_cfg):
-        """Inicializa o sensor com vínculo ao dispositivo pai."""
+        """Inicializa o sensor com proteção de tipos."""
         super().__init__(coordinator)
         self._equip = equip
         self._config = sensor_cfg
         self._attr_unique_id = f"esm_{sensor_cfg['uuid']}"
         self._attr_name = f"{equip['nome']} {sensor_cfg['tipo'].capitalize()}"
         self._state = None
+        self._tipo = sensor_cfg.get("tipo")
+        self._ha_source_entity = sensor_cfg.get("ha_entity_id")
 
-        # Agrupamento por Dispositivo no Home Assistant
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, equip["uuid"])},
             name=equip["nome"],
@@ -58,36 +55,47 @@ class EasySmartMonitorEntity(CoordinatorEntity, SensorEntity):
             suggested_area=equip.get("local"),
         )
 
-        # Mapeamento de Classes e Unidades
-        tipo = sensor_cfg.get("tipo")
-        if tipo == "temperatura":
+        # Configura as características com base no tipo definido no config_flow
+        self._setup_sensor_type()
+
+    def _setup_sensor_type(self):
+        """Define ícones, unidades e classes de dispositivo."""
+        if self._tipo == "temperatura":
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
-            self._attr_state_class = SensorStateClass.MEASUREMENT
             self._attr_native_unit_of_measurement = "°C"
-        elif tipo == "energia":
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        elif self._tipo == "energia":
             self._attr_device_class = SensorDeviceClass.POWER
-            self._attr_state_class = SensorStateClass.MEASUREMENT
             self._attr_native_unit_of_measurement = "W"
-        elif tipo == "tensao":
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        elif self._tipo == "tensao":
             self._attr_device_class = SensorDeviceClass.VOLTAGE
-            self._attr_state_class = SensorStateClass.MEASUREMENT
             self._attr_native_unit_of_measurement = "V"
-        elif tipo == "corrente":
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        elif self._tipo == "corrente":
             self._attr_device_class = SensorDeviceClass.CURRENT
-            self._attr_state_class = SensorStateClass.MEASUREMENT
             self._attr_native_unit_of_measurement = "A"
-        elif tipo == "humidade":
-            self._attr_device_class = SensorDeviceClass.HUMIDITY
             self._attr_state_class = SensorStateClass.MEASUREMENT
+        elif self._tipo == "humidade":
+            self._attr_device_class = SensorDeviceClass.HUMIDITY
             self._attr_native_unit_of_measurement = "%"
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        elif self._tipo == "status":
+            # Tipo Status não tem unidade nem classe numérica, aceita strings puras
+            self._attr_device_class = None
+            self._attr_native_unit_of_measurement = None
+            self._attr_state_class = None
+            self._attr_icon = "mdi:information-variant"
+        else:
+            self._attr_state_class = None
 
     @property
     def native_value(self):
-        """Retorna o valor atual coletado."""
+        """Retorna o estado atual processado."""
         return self._state
 
     async def async_added_to_hass(self) -> None:
-        """Configura a escuta de mudanças de estado da entidade vinculada."""
+        """Monitora a entidade original e trata exceções de valor."""
         await super().async_added_to_hass()
 
         @callback
@@ -96,24 +104,40 @@ class EasySmartMonitorEntity(CoordinatorEntity, SensorEntity):
             if new_state is None or new_state.state in ["unknown", "unavailable"]:
                 return
 
-            # Atualiza o estado interno da entidade
-            self._state = new_state.state
+            raw_value = new_state.state
 
-            # Encaminha o dado para a fila de sincronização da API
+            # Lógica de validação para evitar ValueError
+            if self._attr_native_unit_of_measurement is not None:
+                try:
+                    # Se o sensor espera unidade (W, °C), tentamos converter para float
+                    self._state = float(raw_value)
+                except (ValueError, TypeError):
+                    # Se falhar (recebeu string num campo numérico), logamos o erro
+                    # Mas mantemos a string para não travar a integração
+                    _LOGGER.error(
+                        "Conflito de tipo em %s: Esperado número para %s, recebeu '%s'. "
+                        "Dica: Altere o tipo para 'status' nas configurações.",
+                        self.entity_id, self._tipo, raw_value
+                    )
+                    self._state = raw_value
+            else:
+                # Se for tipo 'status', aceitamos qualquer valor sem conversão
+                self._state = raw_value
+
+            # Envia o dado (bruto) para a fila da API
             self.coordinator.client.add_to_queue({
                 "equip_uuid": self._equip["uuid"],
                 "sensor_uuid": self._config["uuid"],
-                "tipo": self._config["tipo"],
-                "status": self._state,
+                "tipo": self._tipo,
+                "status": str(raw_value),
                 "timestamp": datetime.now().isoformat()
             })
 
-            # Notifica o HA para atualizar a interface
             self.async_write_ha_state()
 
-        # Monitora a entidade real do HA (Ex: sensor.thermometer_kitchen)
+        # Vincula a escuta à entidade real do Home Assistant
         self.async_on_remove(
             async_track_state_change_event(
-                self.hass, self._config["ha_entity_id"], _state_listener
+                self.hass, self._ha_source_entity, _state_listener
             )
         )

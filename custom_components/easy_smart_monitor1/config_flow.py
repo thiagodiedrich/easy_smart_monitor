@@ -1,6 +1,6 @@
 import uuid
 import voluptuous as vol
-from typing import Any, Dict
+from typing import Any, Dict, Optional, List
 
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -19,15 +19,21 @@ from .const import (
 from .client import EasySmartClient
 
 class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Gerencia o fluxo inicial de instalação."""
+    """Fluxo de configuração inicial (Instalação)."""
     VERSION = 1
 
     def __init__(self):
-        self.data_temp: Dict[str, Any] = {"equipments": []}
-        self.current_equipment: Dict[str, Any] = {}
+        """Inicializa variáveis temporárias para o fluxo de instalação."""
+        self.data_temp: Dict[str, Any] = {
+            CONF_API_HOST: "",
+            CONF_USERNAME: "",
+            CONF_PASSWORD: "",
+            "equipments": []
+        }
+        self.current_equip: Dict[str, Any] = {}
 
     async def async_step_user(self, user_input=None) -> FlowResult:
-        """Passo 1: Login."""
+        """Passo 1: Login e Validação da API."""
         errors = {}
         if user_input is not None:
             if TEST_MODE:
@@ -60,21 +66,19 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_management(self, user_input=None) -> FlowResult:
-        """Menu Inicial."""
+        """Menu de navegação da instalação inicial."""
         return self.async_show_menu(
             step_id="management",
             menu_options=["add_equipment", "finish"]
         )
 
     async def async_step_add_equipment(self, user_input=None) -> FlowResult:
-        """Cadastro de Equipamento."""
+        """Adicionar novo equipamento durante a instalação."""
         if user_input is not None:
-            self.current_equipment = {
-                "id": len(self.data_temp["equipments"]) + 1,
+            self.current_equip = {
                 "uuid": str(uuid.uuid4()),
                 "nome": user_input["nome"],
                 "local": user_input["local"],
-                "intervalo_fila": user_input.get("intervalo_fila", 30),
                 "sensors": []
             }
             return await self.async_step_add_sensor()
@@ -84,25 +88,22 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Required("nome"): str,
                 vol.Required("local"): str,
-                vol.Optional("intervalo_fila", default=30): int,
             })
         )
 
     async def async_step_add_sensor(self, user_input=None) -> FlowResult:
-        """Vínculo de Sensores."""
+        """Vincular sensores ao equipamento (Loop de instalação)."""
         if user_input is not None:
-            sensor_data = {
-                "id": len(self.current_equipment["sensors"]) + 1,
+            self.current_equip["sensors"].append({
                 "uuid": str(uuid.uuid4()),
                 "ha_entity_id": user_input["ha_entity_id"],
                 "tipo": user_input["tipo"],
-            }
-            self.current_equipment["sensors"].append(sensor_data)
+            })
 
             if user_input.get("add_another"):
                 return await self.async_step_add_sensor()
 
-            self.data_temp["equipments"].append(self.current_equipment)
+            self.data_temp["equipments"].append(self.current_equip)
             return await self.async_step_management()
 
         entities = sorted(self.hass.states.async_entity_ids())
@@ -116,7 +117,7 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_finish(self, user_input=None) -> FlowResult:
-        """Finaliza instalação."""
+        """Conclui a instalação."""
         if not self.data_temp.get("equipments"):
             return self.async_abort(reason="no_equipments")
 
@@ -130,64 +131,125 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
         return EasySmartOptionsFlowHandler()
 
-class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
-    """Gerencia Edição e Remoção Real de Dispositivos."""
 
-    def __init__(self):
-        self.current_equipment: Dict[str, Any] = {}
+class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
+    """Gerencia o botão CONFIGURAR - CRUD Completo v1.0.9."""
+
+    def __init__(self) -> None:
+        """Inicializa sem conflito de propriedades."""
+        self.selected_equip_uuid: Optional[str] = None
 
     async def async_step_init(self, user_input=None) -> FlowResult:
-        """Menu de Opções."""
+        """Menu inicial com detecção de dispositivo."""
+        if "device_id" in self.context:
+            dev_reg = dr.async_get(self.hass)
+            device = dev_reg.async_get(self.context["device_id"])
+            if device:
+                for identifier in device.identifiers:
+                    if identifier[0] == DOMAIN:
+                        self.selected_equip_uuid = identifier[1]
+                        return await self.async_step_sensor_menu()
+
         return self.async_show_menu(
             step_id="init",
-            menu_options=["add_more_equipment", "remove_equipment", "change_interval"]
+            menu_options=[
+                "manage_sensors",
+                "add_more_equipment",
+                "remove_equipment",
+                "change_interval"
+            ]
         )
 
-    async def async_step_remove_equipment(self, user_input=None) -> FlowResult:
-        """Remove o equipamento, as entidades e o DISPOSITIVO do registro."""
-        equipments = self.config_entry.data.get("equipments", [])
+    # --- GERENCIAMENTO DE SENSORES (CRUD) ---
 
+    async def async_step_manage_sensors(self, user_input=None) -> FlowResult:
+        """Selecionar equipamento para gerenciar sensores."""
+        equips = self.config_entry.data.get("equipments", [])
         if user_input is not None:
-            equip_uuid = user_input["equip_uuid"]
+            self.selected_equip_uuid = user_input["equip_uuid"]
+            return await self.async_step_sensor_menu()
 
-            # 1. Localiza e remove o dispositivo do Device Registry do HA
-            dev_reg = dr.async_get(self.hass)
-            device = dev_reg.async_get_device(identifiers={(DOMAIN, equip_uuid)})
-            if device:
-                dev_reg.async_remove_device(device.id)
+        options = {e["uuid"]: f"{e['nome']} ({e['local']})" for e in equips}
+        return self.async_show_form(
+            step_id="manage_sensors",
+            data_schema=vol.Schema({vol.Required("equip_uuid"): vol.In(options)})
+        )
 
-            # 2. Atualiza a lista de equipamentos na configuração
-            new_equip_list = [e for e in equipments if e["uuid"] != equip_uuid]
-            new_data = {**self.config_entry.data, "equipments": new_equip_list}
+    async def async_step_sensor_menu(self, user_input=None) -> FlowResult:
+        """Menu de ação para sensores."""
+        return self.async_show_menu(
+            step_id="sensor_menu",
+            menu_options=["add_sensor_to_equip", "remove_sensor_from_equip"]
+        )
 
+    async def async_step_add_sensor_to_equip(self, user_input=None) -> FlowResult:
+        """Adiciona sensor a equipamento existente preservando login."""
+        if user_input is not None:
+            new_data = dict(self.config_entry.data)
+            new_equips = []
+
+            for equip in new_data.get("equipments", []):
+                new_equip = dict(equip)
+                if new_equip["uuid"] == self.selected_equip_uuid:
+                    new_sensors = list(new_equip.get("sensors", []))
+                    new_sensors.append({
+                        "uuid": str(uuid.uuid4()),
+                        "ha_entity_id": user_input["ha_entity_id"],
+                        "tipo": user_input["tipo"],
+                    })
+                    new_equip["sensors"] = new_sensors
+                new_equips.append(new_equip)
+
+            new_data["equipments"] = new_equips
             self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-
-            # 3. Força o reload para limpar o Entity Registry via __init__.py
-            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-
             return self.async_create_entry(title="", data=self.config_entry.options)
 
-        equip_options = {e["uuid"]: f"{e['nome']} ({e['local']})" for e in equipments}
+        entities = sorted(self.hass.states.async_entity_ids())
         return self.async_show_form(
-            step_id="remove_equipment",
+            step_id="add_sensor_to_equip",
             data_schema=vol.Schema({
-                vol.Required("equip_uuid"): vol.In(equip_options)
+                vol.Required("ha_entity_id"): vol.In(entities),
+                vol.Required("tipo"): vol.In(SENSOR_TYPES),
             })
         )
 
+    async def async_step_remove_sensor_from_equip(self, user_input=None) -> FlowResult:
+        """Remove sensor preservando login."""
+        new_data = dict(self.config_entry.data)
+        new_equips = [dict(e) for e in new_data.get("equipments", [])]
+        equip = next((e for e in new_equips if e["uuid"] == self.selected_equip_uuid), None)
+
+        if user_input is not None and equip:
+            equip["sensors"] = [s for s in equip["sensors"] if s["uuid"] != user_input["sensor_uuid"]]
+            new_data["equipments"] = new_equips
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+            return self.async_create_entry(title="", data=self.config_entry.options)
+
+        if not equip or not equip.get("sensors"):
+            return self.async_abort(reason="no_sensors_to_remove")
+
+        options = {s["uuid"]: f"{s['tipo'].capitalize()} ({s['ha_entity_id']})" for s in equip["sensors"]}
+        return self.async_show_form(
+            step_id="remove_sensor_from_equip",
+            data_schema=vol.Schema({vol.Required("sensor_uuid"): vol.In(options)})
+        )
+
+    # --- GERENCIAMENTO DE EQUIPAMENTOS ---
+
     async def async_step_add_more_equipment(self, user_input=None) -> FlowResult:
-        """Passo 1 Expansão."""
+        """Adiciona novo freezer preservando login."""
         if user_input is not None:
-            current_equipments = self.config_entry.data.get("equipments", [])
-            self.current_equipment = {
-                "id": len(current_equipments) + 1,
+            new_data = dict(self.config_entry.data)
+            equips = list(new_data.get("equipments", []))
+            equips.append({
                 "uuid": str(uuid.uuid4()),
                 "nome": user_input["nome"],
                 "local": user_input["local"],
-                "intervalo_fila": 30,
                 "sensors": []
-            }
-            return await self.async_step_add_more_sensor()
+            })
+            new_data["equipments"] = equips
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+            return self.async_create_entry(title="", data=self.config_entry.options)
 
         return self.async_show_form(
             step_id="add_more_equipment",
@@ -197,47 +259,33 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
             })
         )
 
-    async def async_step_add_more_sensor(self, user_input=None) -> FlowResult:
-        """Passo 2 Expansão."""
+    async def async_step_remove_equipment(self, user_input=None) -> FlowResult:
+        """Remove freezer e dispositivo preservando login."""
         if user_input is not None:
-            sensor_data = {
-                "id": len(self.current_equipment["sensors"]) + 1,
-                "uuid": str(uuid.uuid4()),
-                "ha_entity_id": user_input["ha_entity_id"],
-                "tipo": user_input["tipo"],
-            }
-            self.current_equipment["sensors"].append(sensor_data)
+            new_data = dict(self.config_entry.data)
+            uuid_to_rem = user_input["equip_uuid"]
 
-            if user_input.get("add_another"):
-                return await self.async_step_add_more_sensor()
+            dev_reg = dr.async_get(self.hass)
+            device = dev_reg.async_get_device(identifiers={(DOMAIN, uuid_to_rem)})
+            if device:
+                dev_reg.async_remove_device(device.id)
 
-            current_data = dict(self.config_entry.data)
-            updated_equipments = list(current_data.get("equipments", []))
-            updated_equipments.append(self.current_equipment)
-
-            self.hass.config_entries.async_update_entry(self.config_entry, data={**current_data, "equipments": updated_equipments})
-            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            new_data["equipments"] = [e for e in new_data.get("equipments", []) if e["uuid"] != uuid_to_rem]
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
             return self.async_create_entry(title="", data=self.config_entry.options)
 
-        entities = sorted(self.hass.states.async_entity_ids())
+        options = {e["uuid"]: f"{e['nome']} ({e['local']})" for e in self.config_entry.data.get("equipments", [])}
         return self.async_show_form(
-            step_id="add_more_sensor",
-            data_schema=vol.Schema({
-                vol.Required("ha_entity_id"): vol.In(entities),
-                vol.Required("tipo"): vol.In(SENSOR_TYPES),
-                vol.Optional("add_another", default=False): bool,
-            })
+            step_id="remove_equipment",
+            data_schema=vol.Schema({vol.Required("equip_uuid"): vol.In(options)})
         )
 
     async def async_step_change_interval(self, user_input=None) -> FlowResult:
-        """Ajusta o intervalo global."""
+        """Ajusta intervalo de envio."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
-
-        current_interval = self.config_entry.options.get("update_interval", 60)
+        curr = self.config_entry.options.get("update_interval", 60)
         return self.async_show_form(
             step_id="change_interval",
-            data_schema=vol.Schema({
-                vol.Optional("update_interval", default=current_interval): int,
-            })
+            data_schema=vol.Schema({vol.Optional("update_interval", default=curr): int})
         )
