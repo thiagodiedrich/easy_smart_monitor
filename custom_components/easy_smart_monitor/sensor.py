@@ -112,7 +112,7 @@ class EasySmartTelemetrySensor(SensorEntity):
             "energia": (SensorDeviceClass.POWER, "W", "mdi:flash"),
             "tensao": (SensorDeviceClass.VOLTAGE, "V", "mdi:sine-wave"),
             "corrente": (SensorDeviceClass.CURRENT, "A", "mdi:current-ac"),
-            "humidade": (SensorDeviceClass.HUMIDITY, "%", "mdi:water-percent"),
+            "umidade": (SensorDeviceClass.HUMIDITY, "%", "mdi:water-percent"),
         }
 
         if self._tipo in mapping:

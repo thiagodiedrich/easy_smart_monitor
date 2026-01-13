@@ -128,7 +128,7 @@
       "energia": { "name": "Energia" },
       "tensao": { "name": "Tensão" },
       "corrente": { "name": "Corrente" },
-      "humidade": { "name": "Umidade" },
+      "umidade": { "name": "Umidade" },
       "status": { "name": "Status" },
       "conexao": { "name": "Status Conexão API" },
       "sincro": { "name": "Última Sincronização" },
@@ -154,8 +154,10 @@
         "energia": "Energia",
         "tensao": "Tensão",
         "corrente": "Corrente",
-        "humidade": "Umidade",
-        "porta": "Porta"
+        "umidade": "Umidade",
+        "porta": "Porta",
+        "sirene": "Sirene",
+        "status": "Status"
       }
     }
   }

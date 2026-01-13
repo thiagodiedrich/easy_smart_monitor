@@ -37,15 +37,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     entities = []
 
     for equip in equipments:
-        # 1. Sensores de Porta (Físicos)
+        # 1. Sensores de Porta (Físicos) e Sirenes (Físicas ou Lógicas)
         for sensor_cfg in equip.get(CONF_SENSORS, []):
-            if sensor_cfg.get("tipo") == "porta":
+            tipo = sensor_cfg.get("tipo")
+            if tipo == "porta":
                 # Cria a entidade que monitora a porta física
                 door_entity = EasySmartDoorSensor(coordinator, entry, equip, sensor_cfg)
                 entities.append(door_entity)
 
                 # Cria a entidade lógica de Sirene baseada nesta porta
                 entities.append(EasySmartSirenSensor(coordinator, entry, equip, door_entity))
+            
+            elif tipo == "sirene":
+                # Caso o usuário adicione uma sirene física manualmente
+                entities.append(EasySmartGenericBinarySensor(coordinator, entry, equip, sensor_cfg, BinarySensorDeviceClass.SOUND))
 
     if entities:
         async_add_entities(entities)
@@ -108,8 +113,6 @@ class EasySmartDoorSensor(BinarySensorEntity):
             is_open = initial_state.state == STATE_ON
             self._is_open = is_open
             if is_open:
-                # Nota: Não sabemos há quanto tempo está aberta, então usamos agora
-                # ou poderíamos tentar ler a propriedade last_changed
                 self._open_since = initial_state.last_changed.timestamp()
             
             _LOGGER.debug(
@@ -151,9 +154,6 @@ class EasySmartDoorSensor(BinarySensorEntity):
                 "timestamp": datetime.now().isoformat()
             }
 
-            # --- CORREÇÃO DO ERRO ---
-            # Antes: self.coordinator.async_add_telemetry(payload) -> ERRO (sem await)
-            # Agora: Agendamos a tarefa no loop do HA
             self.hass.async_create_task(self.coordinator.async_add_telemetry(payload))
 
         self.async_on_remove(
@@ -176,7 +176,6 @@ class EasySmartSirenSensor(BinarySensorEntity):
         self._attr_translation_key = "sirene"
         self._attr_has_entity_name = True
         self._attr_device_class = BinarySensorDeviceClass.PROBLEM
-        self._attr_icon = "mdi:alarm-light-off"
 
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, equip["uuid"])})
 
@@ -188,8 +187,6 @@ class EasySmartSirenSensor(BinarySensorEntity):
         2. Sirene Ativa
         3. Porta Aberta > Tempo Limite
         """
-        # 1. Configurações Atuais
-        # Precisamos ler diretamente da entry.data porque os Numbers/Switches atualizam lá
         current_config = self._door_sensor._get_current_equip_config()
 
         ativo = current_config.get(CONF_ATIVO, DEFAULT_EQUIPAMENTO_ATIVO)
@@ -213,14 +210,8 @@ class EasySmartSirenSensor(BinarySensorEntity):
         return "mdi:alarm-light" if self.is_on else "mdi:alarm-light-off"
 
     async def async_added_to_hass(self) -> None:
-        """
-        O sensor de sirene precisa atualizar a cada segundo enquanto a porta está aberta
-        para verificar se o tempo estourou.
-        """
         await super().async_added_to_hass()
 
-        # Cria um timer que roda a cada segundo para atualizar o status da sirene
-        # Isso é leve, pois é só uma checagem de memória
         @callback
         def _update_siren_logic(now):
             if self._door_sensor.is_on:
@@ -231,4 +222,74 @@ class EasySmartSirenSensor(BinarySensorEntity):
 
         self.async_on_remove(
             async_track_time_interval(self.hass, _update_siren_logic, timedelta(seconds=1))
+        )
+
+
+class EasySmartGenericBinarySensor(BinarySensorEntity):
+    """Sensor binário genérico para tipos como 'sirene' física ou 'status'."""
+
+    def __init__(self, coordinator, entry, equip, sensor_cfg, device_class=None):
+        self.coordinator = coordinator
+        self.entry = entry
+        self._equip = equip
+        self._config = sensor_cfg
+        self._tipo = sensor_cfg.get("tipo")
+        self._ha_source_entity = sensor_cfg.get("ha_entity_id")
+
+        self._attr_unique_id = f"esm_bin_{sensor_cfg['uuid']}"
+        self._attr_translation_key = self._tipo
+        self._attr_has_entity_name = True
+        self._attr_device_class = device_class
+
+        self._state = False
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, equip["uuid"])},
+            name=equip["nome"],
+            manufacturer="Easy Smart",
+            model="Monitor Industrial v1.0.13",
+        )
+
+    @property
+    def is_on(self):
+        return self._state
+
+    def _get_current_equip_config(self) -> Dict[str, Any]:
+        for e in self.entry.data.get(CONF_EQUIPMENTS, []):
+            if e["uuid"] == self._equip["uuid"]:
+                return e
+        return self._equip
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        initial_state = self.hass.states.get(self._ha_source_entity)
+        if initial_state is not None and initial_state.state not in [STATE_UNAVAILABLE, STATE_UNKNOWN]:
+            self._state = initial_state.state == STATE_ON
+
+        @callback
+        def _state_listener(event):
+            new_state = event.data.get("new_state")
+            if new_state is None or new_state.state in [STATE_UNAVAILABLE, STATE_UNKNOWN]:
+                return
+
+            current_config = self._get_current_equip_config()
+            if not current_config.get(CONF_ATIVO, DEFAULT_EQUIPAMENTO_ATIVO):
+                return
+
+            is_on = new_state.state == STATE_ON
+            self._state = is_on
+            self.async_write_ha_state()
+
+            payload = {
+                "equip_uuid": self._equip["uuid"],
+                "sensor_uuid": self._config["uuid"],
+                "tipo": self._tipo,
+                "status": "ligado" if is_on else "desligado",
+                "timestamp": datetime.now().isoformat()
+            }
+            self.hass.async_create_task(self.coordinator.async_add_telemetry(payload))
+
+        self.async_on_remove(
+            async_track_state_change_event(self.hass, self._ha_source_entity, _state_listener)
         )
