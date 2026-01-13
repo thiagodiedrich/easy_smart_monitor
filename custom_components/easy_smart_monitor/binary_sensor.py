@@ -45,12 +45,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                 door_entity = EasySmartDoorSensor(coordinator, entry, equip, sensor_cfg)
                 entities.append(door_entity)
 
-                # Cria a entidade lógica de Sirene baseada nesta porta
-                entities.append(EasySmartSirenSensor(coordinator, entry, equip, door_entity))
-            
             elif tipo == "sirene":
                 # Caso o usuário adicione uma sirene física manualmente
                 entities.append(EasySmartGenericBinarySensor(coordinator, entry, equip, sensor_cfg, BinarySensorDeviceClass.SOUND))
+
+            elif tipo == "botao":
+                # Caso o usuário adicione um botão de reset físico
+                entities.append(EasySmartButtonSensor(coordinator, entry, equip, sensor_cfg))
 
     if entities:
         async_add_entities(entities)
@@ -107,6 +108,31 @@ class EasySmartDoorSensor(BinarySensorEntity):
         """Registra listener para mudança de estado da porta física e inicializa estado."""
         await super().async_added_to_hass()
 
+        # Listener para o evento de reset pelo botão
+        @callback
+        def _handle_reset_event(event):
+            if event.data.get("equip_uuid") == self._equip["uuid"]:
+                _LOGGER.debug("Botão pressionado: Resetando timer da porta %s", self.entity_id)
+                if self.is_on:
+                    self._open_since = time.time()
+                self.hass.async_create_task(self._check_and_trigger_siren())
+
+        self.async_on_remove(
+            self.hass.bus.async_listen(f"{DOMAIN}_button_pressed", _handle_reset_event)
+        )
+
+        # Timer para verificar tempo de porta aberta e disparar sirene
+        @callback
+        def _check_siren_timer(now):
+            if self.is_on:
+                self.hass.async_create_task(self._check_and_trigger_siren())
+
+        from homeassistant.helpers.event import async_track_time_interval
+        from datetime import timedelta
+        self.async_on_remove(
+            async_track_time_interval(self.hass, _check_siren_timer, timedelta(seconds=5))
+        )
+
         # 1. Tenta inicializar o estado com o valor atual da entidade fonte
         initial_state = self.hass.states.get(self._ha_source_entity)
         if initial_state is not None and initial_state.state not in [STATE_UNAVAILABLE, STATE_UNKNOWN]:
@@ -136,7 +162,7 @@ class EasySmartDoorSensor(BinarySensorEntity):
             # Lógica de Estado
             is_open = new_state.state == STATE_ON
 
-            # Atualiza variáveis internas para a Sirene usar
+            # Atualiza variáveis internas
             if is_open and not self._is_open:
                 self._open_since = time.time()
             elif not is_open:
@@ -144,6 +170,10 @@ class EasySmartDoorSensor(BinarySensorEntity):
 
             self._is_open = is_open
             self.async_write_ha_state() # Atualiza visual no HA
+
+            # Verifica disparo imediato de sirene ao fechar (para desligar)
+            if not is_open:
+                self.hass.async_create_task(self._check_and_trigger_siren())
 
             # Monta payload de telemetria
             payload = {
@@ -160,69 +190,64 @@ class EasySmartDoorSensor(BinarySensorEntity):
             async_track_state_change_event(self.hass, self._ha_source_entity, _door_state_listener)
         )
 
+    async def _check_and_trigger_siren(self):
+        """Verifica se alguma porta do equipamento estourou o tempo e controla as sirenes físicas."""
+        current_config = self._get_current_equip_config()
+        if not current_config.get(CONF_ATIVO, DEFAULT_EQUIPAMENTO_ATIVO):
+            return
 
-class EasySmartSirenSensor(BinarySensorEntity):
-    """
-    Sensor lógico que dispara (ON) se a porta ficar aberta por mais tempo que o permitido.
-    """
-
-    def __init__(self, coordinator, entry, equip, door_sensor: EasySmartDoorSensor):
-        self.coordinator = coordinator
-        self.entry = entry
-        self._equip = equip
-        self._door_sensor = door_sensor # Referência ao sensor de porta
-
-        self._attr_unique_id = f"esm_sirene_{door_sensor._config['uuid']}"
-        self._attr_translation_key = "sirene"
-        self._attr_has_entity_name = True
-        self._attr_device_class = BinarySensorDeviceClass.PROBLEM
-
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, equip["uuid"])})
-
-    @property
-    def is_on(self):
-        """
-        Retorna True (Alerta) se:
-        1. Equipamento Ativo
-        2. Sirene Ativa
-        3. Porta Aberta > Tempo Limite
-        """
-        current_config = self._door_sensor._get_current_equip_config()
-
-        ativo = current_config.get(CONF_ATIVO, DEFAULT_EQUIPAMENTO_ATIVO)
-        sirene_ativa = current_config.get(CONF_SIRENE_ATIVA, DEFAULT_SIRENE_ATIVA)
+        sirene_ativa = current_config.get(CONF_SIRENE_ATIVA, False) # Padrão desativado como pedido
         tempo_limite = current_config.get(CONF_TEMPO_PORTA, DEFAULT_TEMPO_PORTA_ABERTA)
+        
+        # Busca todas as sirenes físicas deste equipamento
+        siren_entities = [s["ha_entity_id"] for s in current_config.get(CONF_SENSORS, []) if s.get("tipo") == "sirene"]
+        
+        if not siren_entities:
+            return
 
-        if not ativo or not sirene_ativa:
-            return False
+        # Se a opção de sirene ativa estiver desligada, garantimos que as sirenes estejam OFF
+        if not sirene_ativa:
+            for entity_id in siren_entities:
+                await self._set_siren_state(entity_id, False)
+            return
 
-        # 2. Verifica Duração
-        tempo_aberto = self._door_sensor.open_duration
+        # Verifica se ESTA porta ou QUALQUER OUTRA porta deste equipamento está aberta além do tempo
+        # Para simplificar, cada porta cuida de si mesma no disparo, mas o desligamento depende de todas estarem fechadas
+        
+        # 1. Verifica se deve LIGAR (baseado nesta porta para agilidade)
+        if self.is_on and self.open_duration > tempo_limite:
+            for entity_id in siren_entities:
+                await self._set_siren_state(entity_id, True)
+            return
 
-        # Dispara se passou do tempo
-        if tempo_aberto > tempo_limite:
-            return True
+        # 2. Verifica se deve DESLIGAR (somente se TODAS as portas do equipamento estiverem ok)
+        all_doors_ok = True
+        for sensor_cfg in current_config.get(CONF_SENSORS, []):
+            if sensor_cfg.get("tipo") == "porta":
+                # Precisamos checar o estado real no HA, pois não temos acesso fácil aos outros objetos EasySmartDoorSensor
+                state = self.hass.states.get(sensor_cfg["ha_entity_id"])
+                if state and state.state == STATE_ON:
+                    # Calcula duração se estiver aberta
+                    duration = time.time() - state.last_changed.timestamp()
+                    if duration > tempo_limite:
+                        all_doors_ok = False
+                        break
+        
+        if all_doors_ok:
+            for entity_id in siren_entities:
+                await self._set_siren_state(entity_id, False)
 
-        return False
-
-    @property
-    def icon(self):
-        return "mdi:alarm-light" if self.is_on else "mdi:alarm-light-off"
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-
-        @callback
-        def _update_siren_logic(now):
-            if self._door_sensor.is_on:
-                self.async_write_ha_state()
-
-        from homeassistant.helpers.event import async_track_time_interval
-        from datetime import timedelta
-
-        self.async_on_remove(
-            async_track_time_interval(self.hass, _update_siren_logic, timedelta(seconds=1))
-        )
+    async def _set_siren_state(self, entity_id, turn_on):
+        """Auxiliar para ligar/desligar uma entidade no HA."""
+        domain = entity_id.split(".")[0]
+        service = "turn_on" if turn_on else "turn_off"
+        
+        # Tenta usar o serviço genérico homeassistant.turn_on/off se o domínio for comum
+        # ou o serviço específico do domínio
+        try:
+            await self.hass.services.async_call(domain, service, {"entity_id": entity_id})
+        except Exception as e:
+            _LOGGER.error("Erro ao controlar sirene %s: %s", entity_id, e)
 
 
 class EasySmartGenericBinarySensor(BinarySensorEntity):
@@ -292,4 +317,46 @@ class EasySmartGenericBinarySensor(BinarySensorEntity):
 
         self.async_on_remove(
             async_track_state_change_event(self.hass, self._ha_source_entity, _state_listener)
+        )
+
+
+class EasySmartButtonSensor(BinarySensorEntity):
+    """Sensor que representa um botão físico de reset de alarme."""
+
+    def __init__(self, coordinator, entry, equip, sensor_cfg):
+        self.coordinator = coordinator
+        self.entry = entry
+        self._equip = equip
+        self._config = sensor_cfg
+        self._ha_source_entity = sensor_cfg.get("ha_entity_id")
+
+        self._attr_unique_id = f"esm_btn_{sensor_cfg['uuid']}"
+        self._attr_translation_key = "botao"
+        self._attr_has_entity_name = True
+        self._attr_icon = "mdi:bell-off"
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, equip["uuid"])},
+            name=equip["nome"],
+            manufacturer="Easy Smart",
+            model="Monitor Industrial v1.0.13",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        @callback
+        def _button_listener(event):
+            new_state = event.data.get("new_state")
+            if new_state is None:
+                return
+
+            # Dispara o reset quando o botão for pressionado (geralmente ON em sensores momentâneos)
+            # Mas vamos disparar em qualquer mudança para ON para garantir
+            if new_state.state == STATE_ON:
+                _LOGGER.info("Botão de Reset pressionado para equipamento %s", self._equip["nome"])
+                self.hass.bus.async_fire(f"{DOMAIN}_button_pressed", {"equip_uuid": self._equip["uuid"]})
+
+        self.async_on_remove(
+            async_track_state_change_event(self.hass, self._ha_source_entity, _button_listener)
         )

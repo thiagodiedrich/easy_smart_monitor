@@ -129,7 +129,7 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Required("tipo"): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=["temperatura", "energia", "tensao", "corrente", "umidade", "porta", "sirene", "status"],
+                        options=["temperatura", "energia", "tensao", "corrente", "umidade", "porta", "sirene", "status", "botao"],
                         translation_key="sensor_types",
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
@@ -238,7 +238,7 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 vol.Required("tipo"): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=["temperatura", "energia", "tensao", "corrente", "umidade", "porta", "sirene", "status"],
+                        options=["temperatura", "energia", "tensao", "corrente", "umidade", "porta", "sirene", "status", "botao"],
                         translation_key="sensor_types",
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )

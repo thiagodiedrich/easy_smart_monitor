@@ -13,7 +13,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     entities = []
     for equip in equipments:
         entities.append(EasySmartNumber(coordinator, entry, equip, "intervalo_coleta", "Intervalo de Coleta", 10, 3600, 1, "s", "mdi:timer-cog"))
-        entities.append(EasySmartNumber(coordinator, entry, equip, "tempo_porta", "Tempo Porta Aberta", 10, 600, 1, "s", "mdi:door-open"))
+        
+        # Verifica se o equipamento possui sensores do tipo 'porta' e 'sirene'
+        sensors = equip.get("sensors", [])
+        has_door = any(s.get("tipo") == "porta" for s in sensors)
+        has_siren = any(s.get("tipo") == "sirene" for s in sensors)
+
+        if has_door and has_siren:
+            entities.append(EasySmartNumber(coordinator, entry, equip, "tempo_porta", "Tempo Porta Aberta", 10, 600, 1, "s", "mdi:door-open"))
 
     async_add_entities(entities)
 

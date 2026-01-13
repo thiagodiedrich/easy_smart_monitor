@@ -136,7 +136,8 @@
     },
     "binary_sensor": {
       "porta": { "name": "Porta" },
-      "sirene": { "name": "Sirene" }
+      "sirene": { "name": "Sirene" },
+      "botao": { "name": "Botão de Reset" }
     },
     "number": {
       "intervalo_coleta": { "name": "Intervalo de Sincronia" },
@@ -157,7 +158,8 @@
         "umidade": "Umidade",
         "porta": "Porta",
         "sirene": "Sirene",
-        "status": "Status"
+        "status": "Status",
+        "botao": "Botão de Reset"
       }
     }
   }

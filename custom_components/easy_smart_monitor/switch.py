@@ -4,7 +4,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    DEFAULT_EQUIPAMENTO_ATIVO,
+    DEFAULT_SIRENE_ATIVA
+)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator = hass.data[DOMAIN][entry.entry_id]
@@ -13,7 +17,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     entities = []
     for equip in equipments:
         entities.append(EasySmartSwitch(coordinator, entry, equip, "ativo", "Equipamento Ativo", "mdi:power"))
-        entities.append(EasySmartSwitch(coordinator, entry, equip, "sirene_ativa", "Sirene Ativa", "mdi:alarm-bell"))
+        
+        # Verifica se o equipamento possui um sensor do tipo 'sirene'
+        has_siren = any(s.get("tipo") == "sirene" for s in equip.get("sensors", []))
+        
+        if has_siren:
+            entities.append(EasySmartSwitch(coordinator, entry, equip, "sirene_ativa", "Sirene Ativa", "mdi:alarm-bell"))
 
     async_add_entities(entities)
 
@@ -34,7 +43,9 @@ class EasySmartSwitch(SwitchEntity):
         # Busca o estado atual dentro do dicionário do equipamento no config_entry
         for e in self.entry.data.get("equipments", []):
             if e["uuid"] == self.equip["uuid"]:
-                return e.get(self.key, True)
+                # Retorna o valor salvo ou o padrão correspondente
+                default = DEFAULT_SIRENE_ATIVA if self.key == "sirene_ativa" else DEFAULT_EQUIPAMENTO_ATIVO
+                return e.get(self.key, default)
         return True
 
     async def async_turn_on(self, **kwargs):
