@@ -1,75 +1,107 @@
 import logging
-import time
 from datetime import timedelta
 from typing import Any, Dict
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, DEFAULT_SCAN_INTERVAL
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-class EasySmartCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
-    """Classe para gerenciar a atualização de dados e sincronização com a API."""
+class EasySmartCoordinator(DataUpdateCoordinator):
+    """
+    Coordenador centralizado para despacho de dados.
+    Gerencia o ciclo de vida das transferências entre a fila local e a API.
+    """
 
-    def __init__(self, hass: HomeAssistant, client: Any, update_interval: int):
-        """Inicializa o coordenador."""
+    def __init__(self, hass: HomeAssistant, client, update_interval: int):
+        """
+        Inicializa o coordenador de monitoramento.
+
+        :param hass: Instância do Home Assistant.
+        :param client: Instância do EasySmartClient (client.py).
+        :param update_interval: Tempo em segundos definido nas opções do usuário.
+        """
         self.client = client
         self.hass = hass
-        
-        # O intervalo do Coordinator define a frequência de verificação da fila
+        self._last_sync_count = 0
+        self._last_sync_status = "Iniciando"
+
+        # Configura o intervalo de atualização do DataUpdateCoordinator
         super().__init__(
             hass,
             _LOGGER,
-            name=DOMAIN,
+            name=f"{DOMAIN}_coordinator",
             update_interval=timedelta(seconds=update_interval),
         )
 
-        # Controle de tempo para envio à API (independente do poll de sensores)
-        self.last_api_sync = time.time()
-        self.api_sync_interval = 60  # Valor padrão em segundos
-
     async def _async_update_data(self) -> Dict[str, Any]:
         """
-        Atualiza os dados internamente. 
-        Este método é chamado automaticamente pelo Home Assistant 
-        com base no update_interval.
+        Processa o despacho da fila para o servidor externo.
+        Este método é chamado automaticamente pelo HA com base no update_interval.
         """
+        _LOGGER.debug("Iniciando ciclo de processamento de dados do coordenador.")
+
+        if not self.client.queue:
+            _LOGGER.debug("Fila vazia. Nenhum dado para enviar neste ciclo.")
+            return {
+                "queue_size": 0,
+                "status": "idle",
+                "last_success": True
+            }
+
         try:
-            current_time = time.time()
+            # Captura a quantidade atual antes de tentar o envio
+            items_to_send = len(self.client.queue)
 
-            # Lógica de Sincronização com a API REST
-            # Só tenta enviar se o intervalo (60s) passou E se há itens na fila
-            if (current_time - self.last_api_sync) >= self.api_sync_interval:
-                if len(self.client.queue) > 0:
-                    _LOGGER.debug(
-                        "Iniciando sincronização programada: %s itens na fila", 
-                        len(self.client.queue)
-                    )
-                    
-                    success = await self.client.send_queue()
-                    
-                    if success:
-                        self.last_api_sync = current_time
-                        _LOGGER.info("Sincronização com API concluída com sucesso.")
-                    else:
-                        _LOGGER.warning("Falha na sincronização. Dados mantidos para a próxima tentativa.")
-                else:
-                    _LOGGER.debug("Fila vazia. Sincronização ignorada.")
-                    self.last_api_sync = current_time
+            # Tenta o envio via cliente (que gerencia autenticação e TEST_MODE)
+            success = await self.client.send_queue()
 
-            # Retorna o status atual para as entidades
+            if success:
+                self._last_sync_status = "Sucesso"
+                self._last_sync_count = items_to_send
+                _LOGGER.info(
+                    "Sincronização concluída: %s registros enviados com sucesso",
+                    items_to_send
+                )
+            else:
+                self._last_sync_status = "Falha na API"
+                _LOGGER.warning(
+                    "A API não aceitou os dados. %s registros mantidos na fila local.",
+                    len(self.client.queue)
+                )
+
+            # Retorna um dicionário de estado.
+            # Isso é o que "alimenta" as entidades vinculadas ao coordenador.
             return {
                 "queue_size": len(self.client.queue),
-                "last_sync": self.last_api_sync,
-                "api_connected": self.client.token is not None
+                "last_sync_status": self._last_sync_status,
+                "items_sent_last_batch": self._last_sync_count,
+                "test_mode_active": self.client.token == "fake_test_token"
             }
 
         except Exception as err:
-            raise UpdateFailed(f"Erro ao comunicar com a lógica do monitor: {err}")
+            self._last_sync_status = f"Erro: {str(err)}"
+            _LOGGER.error("Falha crítica no ciclo do coordenador: %s", err)
+            # Não usamos 'raise UpdateFailed' aqui para evitar que os sensores
+            # fiquem cinzas (unavailable) caso a internet caia.
+            return {
+                "queue_size": len(self.client.queue),
+                "status": "error",
+                "error_detail": str(err)
+            }
 
-    @property
-    def queue_count(self) -> int:
-        """Retorna a quantidade de itens aguardando envio."""
-        return len(self.client.queue)
+    @callback
+    def async_update_interval(self, new_interval: int) -> None:
+        """
+        Permite que o OptionsFlow altere o tempo de sincronia em tempo real.
+        Chamado pelo listener de opções no __init__.py.
+        """
+        _LOGGER.info(
+            "Ajustando intervalo de atualização do coordenador para %s segundos",
+            new_interval
+        )
+        self.update_interval = timedelta(seconds=new_interval)
+        # Força uma atualização imediata com o novo intervalo
+        self.async_set_updated_data(self.data)

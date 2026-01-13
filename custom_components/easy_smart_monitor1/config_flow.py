@@ -26,7 +26,7 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.current_equipment: Dict[str, Any] = {}
 
     async def async_step_user(self, user_input=None) -> FlowResult:
-        """Passo 1: Login."""
+        """Passo 1: Login/Ativação."""
         errors = {}
         if user_input is not None:
             if TEST_MODE:
@@ -59,14 +59,14 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_management(self, user_input=None) -> FlowResult:
-        """Passo 2: Menu Principal."""
+        """Menu de Gerenciamento Inicial."""
         return self.async_show_menu(
             step_id="management",
             menu_options=["add_equipment", "finish"]
         )
 
     async def async_step_add_equipment(self, user_input=None) -> FlowResult:
-        """Passo 3: Cadastro de Equipamento."""
+        """Cadastro de Equipamento."""
         if user_input is not None:
             self.current_equipment = {
                 "id": len(self.data_temp["equipments"]) + 1,
@@ -88,7 +88,7 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_add_sensor(self, user_input=None) -> FlowResult:
-        """Passo 4: Vínculo de Sensores."""
+        """Vínculo de Sensores."""
         if user_input is not None:
             sensor_data = {
                 "id": len(self.current_equipment["sensors"]) + 1,
@@ -115,7 +115,7 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_finish(self, user_input=None) -> FlowResult:
-        """Finaliza a configuração inicial."""
+        """Finaliza a instalação inicial."""
         if not self.data_temp.get("equipments"):
             return self.async_abort(reason="no_equipments")
 
@@ -133,7 +133,7 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
     """Gerencia a edição de equipamentos via botão 'Configurar'."""
 
     def __init__(self):
-        self.new_data = {}
+        self.current_equipment: Dict[str, Any] = {}
 
     async def async_step_init(self, user_input=None) -> FlowResult:
         """Menu de opções."""
@@ -143,9 +143,8 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_change_interval(self, user_input=None) -> FlowResult:
-        """Ajusta apenas o tempo de sincronização."""
+        """Altera apenas o intervalo global."""
         if user_input is not None:
-            # Atualiza apenas as opções
             return self.async_create_entry(title="", data=user_input)
 
         current_interval = self.config_entry.options.get("update_interval", 60)
@@ -157,34 +156,63 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_add_more_equipment(self, user_input=None) -> FlowResult:
-        """Permite adicionar um novo equipamento à lista existente."""
+        """Passo 1 de expansão: Dados do Equipamento."""
         if user_input is not None:
-            # 1. Pegamos a lista atual de equipamentos
-            updated_equipments = list(self.config_entry.data.get("equipments", []))
-
-            # 2. Criamos o novo equipamento (sensores virão em um passo futuro se quiser expandir)
-            # Para simplificar aqui, adicionamos um equipamento básico
-            new_equip = {
-                "id": len(updated_equipments) + 1,
+            # Recupera o total de equipamentos para gerar ID correto
+            current_equipments = self.config_entry.data.get("equipments", [])
+            self.current_equipment = {
+                "id": len(current_equipments) + 1,
                 "uuid": str(uuid.uuid4()),
                 "nome": user_input["nome"],
                 "local": user_input["local"],
                 "intervalo_fila": 30,
                 "sensors": []
             }
-            updated_equipments.append(new_equip)
-
-            # 3. Atualizamos o config_entry de forma permanente
-            self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                data={**self.config_entry.data, "equipments": updated_equipments}
-            )
-            return self.async_create_entry(title="", data=self.config_entry.options)
+            return await self.async_step_add_more_sensor()
 
         return self.async_show_form(
             step_id="add_more_equipment",
             data_schema=vol.Schema({
                 vol.Required("nome"): str,
                 vol.Required("local"): str,
+            })
+        )
+
+    async def async_step_add_more_sensor(self, user_input=None) -> FlowResult:
+        """Passo 2 de expansão: Loop de sensores e Gravação Final."""
+        if user_input is not None:
+            sensor_data = {
+                "id": len(self.current_equipment["sensors"]) + 1,
+                "uuid": str(uuid.uuid4()),
+                "ha_entity_id": user_input["ha_entity_id"],
+                "tipo": user_input["tipo"],
+            }
+            self.current_equipment["sensors"].append(sensor_data)
+
+            if user_input.get("add_another"):
+                return await self.async_step_add_more_sensor()
+
+            # GRAVAÇÃO E RECARREGAMENTO
+            current_data = dict(self.config_entry.data)
+            updated_equipments = list(current_data.get("equipments", []))
+            updated_equipments.append(self.current_equipment)
+
+            new_data = {**current_data, "equipments": updated_equipments}
+
+            # Atualiza o dado permanentemente
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+
+            # Força o Home Assistant a ler os novos equipamentos imediatamente
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+            return self.async_create_entry(title="", data=self.config_entry.options)
+
+        entities = sorted(self.hass.states.async_entity_ids())
+        return self.async_show_form(
+            step_id="add_more_sensor",
+            data_schema=vol.Schema({
+                vol.Required("ha_entity_id"): vol.In(entities),
+                vol.Required("tipo"): vol.In(SENSOR_TYPES),
+                vol.Optional("add_another", default=False): bool,
             })
         )
