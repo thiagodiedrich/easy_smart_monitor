@@ -1,14 +1,14 @@
 {
-  "domain": "easy_smart_monitor1",
+  "domain": "easy_smart_monitor",
   "name": "Easy Smart Monitor",
   "codeowners": ["@thiagodiedrich"],
   "config_flow": true,
-  "documentation": "https://github.com/thiagodiedrich/easy_smart_monitor1",
+  "documentation": "https://github.com/thiagodiedrich/easy_smart_monitor",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/thiagodiedrich/easy_smart_monitor1/issues",
+  "issue_tracker": "https://github.com/thiagodiedrich/easy_smart_monitor/issues",
   "requirements": ["aiohttp"],
   "dependencies": ["http"],
-  "version": "1.0.11",
+  "version": "1.0.12",
   "logins": []
 }

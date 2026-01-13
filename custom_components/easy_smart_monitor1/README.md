@@ -1,64 +1,126 @@
-🧊 Easy Smart Monitor v1.0.11
-Integração avançada para monitoramento industrial de freezers e geladeiras no Home Assistant. Desenvolvida para garantir que nenhum dado de telemetria seja perdido, mesmo em condições de instabilidade de rede.
+Documentação oficial para a versão estável.
+
+🧊 Easy Smart Monitor v1.0.12
+Integração profissional para monitoramento industrial de freezers, geladeiras e câmaras frias no Home Assistant.
+
+Desenvolvida com foco em integridade de dados, esta integração garante que nenhuma leitura crítica de temperatura ou energia seja perdida, mesmo que a conexão com a internet ou com o servidor API falhe.
 
 ✨ Funcionalidades Principais
-Persistência Atômica (Fila Offline): Sistema de fila em disco que armazena os dados localmente caso o servidor API esteja offline, enviando tudo em lote (bulk) assim que a conexão é restaurada.
+🛡️ Persistência de Fila (Offline Queue):
 
-Controle Total por Equipamento: Cada dispositivo possui controles individuais de ativação e parâmetros de segurança.
+Se a API cair, os dados são salvos imediatamente no disco local do Home Assistant.
 
-Gestão de Sirene Inteligente: Alerta sonoro/visual baseado no tempo de abertura da porta, com timer configurável via interface.
+Assim que a conexão retorna, a integração envia todos os dados acumulados em lote (bulk), garantindo zero perda de histórico.
 
-Diagnóstico em Tempo Real: Sensores dedicados para monitorar a saúde da conexão com a API e o tamanho da fila de espera.
+⚙️ Controles de Hardware Nativos:
 
-🛠️ Controles do Dispositivo (v1.0.11)
-A partir da versão 1.0.11, cada equipamento monitorado apresenta quatro controles principais na aba de configurações:
+Switches para ativar/desativar equipamentos individualmente.
 
-Equipamento Ativo (Switch): Ativa ou interrompe globalmente a coleta e o envio de dados para este freezer específico.
+Controle de sirene integrado.
 
-Intervalo de Coleta (Number): Define o tempo mínimo (em segundos) entre as leituras dos sensores para evitar sobrecarga de dados.
+⚡ Sincronização Inteligente:
 
-Sirene Ativa (Switch): Habilita ou desabilita o disparo do alarme de "Problema" para a porta aberta.
+Envio otimizado para reduzir tráfego de rede.
 
-Tempo Porta Aberta (Number): Define quantos segundos a porta pode permanecer aberta antes que a Sirene mude para o estado de alerta.
+Lógica de retry exponencial em caso de falhas de comunicação.
+
+📊 Diagnósticos em Tempo Real:
+
+Sensores dedicados para monitorar a saúde da conexão, tamanho da fila de envio e data da última sincronização.
+
+🛠️ Painel de Controle (Novidade v1.0.12)
+Cada equipamento adicionado ao Easy Smart Monitor ganha automaticamente uma área de configuração com 4 controles vitais:
+
+Switch Equipamento Ativo:
+
+ON: Coleta e envia dados normalmente.
+
+OFF: Pausa a coleta imediatamente (útil para manutenção ou degelo).
+
+Switch Sirene Ativa:
+
+Habilita ou desabilita a lógica de disparo de alarme sonoro para este equipamento.
+
+Number Intervalo de Coleta (segundos):
+
+Define a frequência mínima de envio de dados. Evita que sensores muito ruidosos lotem a fila desnecessariamente.
+
+Number Tempo Porta Aberta (segundos):
+
+Define quanto tempo a porta pode ficar aberta antes de o sensor binary_sensor.sirene disparar o alerta.
 
 🚀 Instalação
-Manual
-Baixe o repositório.
+Pré-requisitos
+Home Assistant Core 2024.1 ou superior.
 
-Copie a pasta easy_smart_monitor1 para dentro do diretório custom_components do seu Home Assistant.
+Acesso à pasta custom_components.
+
+Passo a Passo
+Baixe o código fonte da versão mais recente.
+
+Copie a pasta easy_smart_monitor para dentro do diretório /config/custom_components/ do seu Home Assistant.
 
 Reinicie o Home Assistant.
 
-Vá em Configurações > Dispositivos e Serviços > Adicionar Integração e procure por "Easy Smart Monitor".
+Após reiniciar, vá em:
+
+Configurações > Dispositivos e Serviços > Adicionar Integração.
+
+Pesquise por "Easy Smart Monitor".
+
+Siga o fluxo de configuração visual.
 
 ⚙️ Configuração
-Durante o fluxo de configuração, você será guiado para:
+1. Conexão
+Insira a URL do seu servidor API (Ex: http://192.168.1.100:5000) e as credenciais de autenticação.
 
-Inserir o Host da API e suas credenciais de acesso.
+2. Cadastro de Equipamentos
+Defina o nome (ex: "Freezer Carnes") e o local (ex: "Cozinha").
 
-Cadastrar seus equipamentos (Freezers/Geladeiras).
+3. Vínculo de Sensores (Seletores Visuais)
+A partir da versão 1.0.11+, você não precisa digitar os IDs. Utilize os menus suspensos para selecionar as entidades do Home Assistant (Zigbee, ESPHome, Tuya, etc.) que correspondem a:
 
-Vincular as entidades existentes no seu HA (sensores de temperatura, sensores de porta Zigbee/ESP32, etc.) aos tipos de grandeza da integração.
+Temperatura
+
+Energia (Watts)
+
+Tensão (Volts)
+
+Corrente (Amperes)
+
+Porta (Contato Magnético)
 
 📊 Arquitetura de Dados
-A integração utiliza o padrão Coordinator do Home Assistant para gerenciar as atualizações de estado e o Async Client para comunicações não bloqueantes.
-
 Snippet de código
 
-graph TD
-    A[Sensores HA] --> B{Filtro de Intervalo}
-    B -->|Ativo| C[Fila Local .json]
-    C --> D{Conexão API}
-    D -->|Sucesso| E[Limpar Fila]
-    D -->|Falha| F[Manter no Disco]
-📝 Especificações Técnicas
-Domínio: easy_smart_monitor1
+graph LR
+    A[Sensores HA] -->|Leitura| B{Filtro & Switch}
+    B -->|Ativo| C[Fila em Disco .json]
+    C -->|Coordenador| D{API Online?}
+    D -->|Sim| E[Servidor Easy Smart]
+    D -->|Não| C
+Persistência: Os dados são gravados atomicamente em /config/.storage/easy_smart_monitor_queue.json.
 
-Requisitos: aiohttp (utiliza a versão do Core)
+Protocolo: HTTP/POST com payload JSON em lote.
 
-Dependências: http
+📝 Changelog Recente
+v1.0.12 (Estável)
+[x] Estabilização do Config Flow com seletores visuais.
 
-Persistência: Armazenada em /config/.storage/easy_smart_monitor1_queue.json
+[x] Renomeação do domínio para easy_smart_monitor.
 
-👤 Autor
-Thiago Diedrich - @thiagodiedrich
+[x] Desativação do modo de teste para produção.
+
+v1.0.11
+[x] Adição dos controles Switch e Number.
+
+[x] Correção do erro de persistência em disco.
+
+[x] Tradução completa PT-BR.
+
+👤 Autor e Suporte
+Desenvolvedor: Thiago Diedrich (@thiagodiedrich)
+
+Licença: MIT
+
+Easy Smart Monitor - Inteligência Industrial ao seu alcance.

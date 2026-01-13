@@ -1,10 +1,12 @@
 import logging
 import time
 from datetime import datetime
+from typing import Any, Dict, Optional
+
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
-    SensorDeviceClass
+    SensorDeviceClass,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -12,149 +14,227 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    CONF_EQUIPMENTS,
+    CONF_SENSORS,
+    CONF_ATIVO,
+    CONF_INTERVALO_COLETA,
+    DEFAULT_INTERVALO_COLETA,
+    DEFAULT_EQUIPAMENTO_ATIVO,
+    DIAG_CONEXAO_OK,
+    DIAG_CONEXAO_ERR,
+    ATTR_LAST_SYNC,
+    ATTR_QUEUE_SIZE
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    """Configura as entidades de sensor e diagnóstico v1.0.11."""
+    """
+    Configura os sensores de telemetria e diagnóstico v1.0.11.
+    """
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    equipments = entry.data.get("equipments", [])
+    equipments = entry.data.get(CONF_EQUIPMENTS, [])
 
     entities = []
-    for equip in equipments:
-        # Sensores de Telemetria
-        for sensor_cfg in equip.get("sensors", []):
-            if sensor_cfg.get("tipo") not in ["sirene", "porta"]:
-                entities.append(EasySmartMonitorEntity(coordinator, entry, equip, sensor_cfg))
 
-        # Sensores de Diagnóstico Automáticos
-        entities.append(EasySmartDiagnosticSensor(coordinator, equip, "conexao"))
-        entities.append(EasySmartDiagnosticSensor(coordinator, equip, "sincro"))
+    for equip in equipments:
+        equip_uuid = equip["uuid"]
+
+        # 1. Criação dos Sensores de Telemetria (Temperatura, Energia, etc.)
+        for sensor_cfg in equip.get(CONF_SENSORS, []):
+            # Ignora sensores binários (Porta/Sirene) pois são tratados no binary_sensor.py
+            if sensor_cfg.get("tipo") in ["porta", "sirene"]:
+                continue
+
+            entities.append(EasySmartTelemetrySensor(coordinator, entry, equip, sensor_cfg))
+
+        # 2. Criação dos Sensores de Diagnóstico (Vinculados ao Equipamento)
+        # Status da Conexão API
+        entities.append(EasySmartDiagnosticSensor(
+            coordinator, equip, "conexao", "Status Conexão API", "mdi:server-network"
+        ))
+        # Última Sincronização
+        entities.append(EasySmartDiagnosticSensor(
+            coordinator, equip, "sincro", "Última Sincronização", "mdi:clock-check"
+        ))
+        # Tamanho da Fila (Para monitorar dados pendentes deste equipamento)
+        entities.append(EasySmartDiagnosticSensor(
+            coordinator, equip, "fila", "Fila de Envio", "mdi:tray-full"
+        ))
 
     if entities:
         async_add_entities(entities)
 
-class EasySmartMonitorEntity(CoordinatorEntity, SensorEntity):
-    """Entidade de telemetria que respeita os novos controles de hardware."""
+
+class EasySmartTelemetrySensor(CoordinatorEntity, SensorEntity):
+    """
+    Sensor que monitora uma entidade de origem do HA e envia dados para a fila.
+    Respeita 'Equipamento Ativo' e 'Intervalo de Coleta'.
+    """
 
     def __init__(self, coordinator, entry, equip, sensor_cfg):
         super().__init__(coordinator)
         self.entry = entry
         self._equip = equip
         self._config = sensor_cfg
+
+        # Identificação
         self._attr_unique_id = f"esm_{sensor_cfg['uuid']}"
         self._attr_name = f"{equip['nome']} {sensor_cfg['tipo'].capitalize()}"
+        self._attr_has_entity_name = False # Usa o nome completo definido acima
+
+        # Estado interno
         self._state = None
         self._tipo = sensor_cfg.get("tipo")
         self._ha_source_entity = sensor_cfg.get("ha_entity_id")
+        self._last_collection_time = 0.0 # Timestamp da última coleta
 
-        # Controle de fluxo (v1.0.11)
-        self._last_collection_time = 0
+        # Configuração de Ícone e Unidade
+        self._setup_sensor_characteristics()
 
+        # Device Info (Agrupamento)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, equip["uuid"])},
             name=equip["nome"],
             manufacturer="Easy Smart",
-            model="Monitor v1",
+            model="Monitor Industrial v1.0.11",
             suggested_area=equip.get("local"),
         )
 
-        self._setup_sensor_type()
-
-    def _setup_sensor_type(self):
-        """Define as propriedades do sensor conforme o tipo."""
+    def _setup_sensor_characteristics(self):
+        """Define classe, unidade e ícone baseado no tipo de grandeza."""
         mapping = {
-            "temperatura": (SensorDeviceClass.TEMPERATURE, "°C", SensorStateClass.MEASUREMENT),
-            "energia": (SensorDeviceClass.POWER, "W", SensorStateClass.MEASUREMENT),
-            "tensao": (SensorDeviceClass.VOLTAGE, "V", SensorStateClass.MEASUREMENT),
-            "corrente": (SensorDeviceClass.CURRENT, "A", SensorStateClass.MEASUREMENT),
-            "humidade": (SensorDeviceClass.HUMIDITY, "%", SensorStateClass.MEASUREMENT),
+            "temperatura": (SensorDeviceClass.TEMPERATURE, "°C", "mdi:thermometer"),
+            "energia": (SensorDeviceClass.POWER, "W", "mdi:flash"),
+            "tensao": (SensorDeviceClass.VOLTAGE, "V", "mdi:sine-wave"),
+            "corrente": (SensorDeviceClass.CURRENT, "A", "mdi:current-ac"),
+            "humidade": (SensorDeviceClass.HUMIDITY, "%", "mdi:water-percent"),
         }
 
         if self._tipo in mapping:
-            d_class, unit, s_class = mapping[self._tipo]
-            self._attr_device_class = d_class
+            dev_class, unit, icon = mapping[self._tipo]
+            self._attr_device_class = dev_class
             self._attr_native_unit_of_measurement = unit
-            self._attr_state_class = s_class
+            self._attr_icon = icon
+            self._attr_state_class = SensorStateClass.MEASUREMENT
         else:
-            self._attr_icon = "mdi:information-variant"
+            self._attr_icon = "mdi:chart-line"
 
     @property
     def native_value(self):
         return self._state
 
-    def _get_equip_config(self):
-        """Busca as configurações em tempo real do entry.data (Controles)."""
-        for e in self.entry.data.get("equipments", []):
+    def _get_current_equip_config(self) -> Dict[str, Any]:
+        """Busca a configuração mais recente do equipamento (pode ter mudado via Switch/Number)."""
+        # A entry.data é atualizada pelos controls (switch.py/number.py)
+        for e in self.entry.data.get(CONF_EQUIPMENTS, []):
             if e["uuid"] == self._equip["uuid"]:
                 return e
-        return {}
+        return self._equip # Fallback
 
     async def async_added_to_hass(self) -> None:
-        """Listener que agora respeita os switches e inputs numéricos."""
+        """Registra o listener de mudança de estado."""
         await super().async_added_to_hass()
 
         @callback
-        def _state_listener(event):
+        def _telemetry_listener(event):
+            """Chamado sempre que a entidade original muda no HA."""
             new_state = event.data.get("new_state")
-            if new_state is None or new_state.state in ["unknown", "unavailable"]:
+
+            # Validação Básica
+            if new_state is None or new_state.state in [STATE_UNAVAILABLE, STATE_UNKNOWN]:
                 return
 
-            # 1. Verificação de Equipamento Ativo (Switch 1)
-            config = self._get_equip_config()
-            is_active = config.get("ativo", True)
+            # 1. Verificação de Equipamento Ativo
+            # Obtemos a config atualizada para respeitar o switch IMEDIATAMENTE
+            current_config = self._get_current_equip_config()
+            is_active = current_config.get(CONF_ATIVO, DEFAULT_EQUIPAMENTO_ATIVO)
+
             if not is_active:
-                _LOGGER.debug("Coleta ignorada: %s está desativado.", self._equip["nome"])
+                # Se o switch estiver OFF, ignoramos silenciosamente
                 return
 
-            # 2. Verificação de Intervalo de Coleta (Number 2)
-            intervalo = config.get("intervalo_coleta", 10)
+            # 2. Verificação de Intervalo (Debounce)
+            intervalo = current_config.get(CONF_INTERVALO_COLETA, DEFAULT_INTERVALO_COLETA)
             now = time.time()
-            if now - self._last_collection_time < intervalo:
-                return # Ignora se estiver dentro do intervalo de carência
 
-            # Processamento do valor
-            raw_val = new_state.state
-            has_unit = getattr(self, "_attr_native_unit_of_measurement", None)
+            if (now - self._last_collection_time) < intervalo:
+                # Ignora atualizações muito rápidas para não floodar a fila
+                return
 
-            if has_unit is not None:
-                try:
-                    self._state = float(raw_val)
-                except (ValueError, TypeError):
-                    self._state = raw_val
-            else:
-                self._state = raw_val
+            # 3. Processamento do Valor
+            try:
+                raw_value = new_state.state
+                # Tenta converter para float se for numérico
+                if self._attr_device_class in [SensorDeviceClass.TEMPERATURE, SensorDeviceClass.POWER, SensorDeviceClass.VOLTAGE]:
+                    processed_value = float(raw_value)
+                else:
+                    processed_value = raw_value
 
-            # Atualiza o timestamp da última coleta bem-sucedida
-            self._last_collection_time = now
+                self._state = processed_value
+                self._last_collection_time = now
 
-            # Envia via coordenador para a fila da API
-            self.coordinator.async_add_telemetry({
-                "equip_uuid": self._equip["uuid"],
-                "sensor_uuid": self._config["uuid"],
-                "tipo": self._tipo,
-                "status": str(raw_val),
-                "timestamp": datetime.now().isoformat()
-            })
-            self.async_write_ha_state()
+                # Monta o payload
+                payload = {
+                    "equip_uuid": self._equip["uuid"],
+                    "sensor_uuid": self._config["uuid"],
+                    "tipo": self._tipo,
+                    "status": str(processed_value),
+                    "timestamp": datetime.now().isoformat()
+                }
 
-        self.async_on_remove(async_track_state_change_event(self.hass, self._ha_source_entity, _state_listener))
+                # 4. Envio para o Coordenador
+                # Usa async_create_task pois estamos dentro de um callback síncrono
+                self.hass.async_create_task(self.coordinator.async_add_telemetry(payload))
+
+                # Atualiza a interface do sensor
+                self.async_write_ha_state()
+
+            except ValueError:
+                _LOGGER.warning("Valor inválido recebido de %s: %s", self._ha_source_entity, raw_value)
+
+        # Monitora a entidade fonte
+        self.async_on_remove(
+            async_track_state_change_event(self.hass, self._ha_source_entity, _telemetry_listener)
+        )
+
 
 class EasySmartDiagnosticSensor(CoordinatorEntity, SensorEntity):
-    """Sensores de diagnóstico permanecem ativos para monitorar o sistema."""
-    def __init__(self, coordinator, equip, diag_type):
+    """
+    Sensor de diagnóstico que expõe as propriedades do Coordinator.
+    Usa 'last_sync_success', 'last_sync_time' e 'queue_size'.
+    """
+
+    def __init__(self, coordinator, equip, diag_type, name, icon):
         super().__init__(coordinator)
         self._equip = equip
         self._diag_type = diag_type
+
         self._attr_unique_id = f"esm_diag_{diag_type}_{equip['uuid']}"
+        self._attr_name = f"{equip['nome']} {name}"
+        self._attr_icon = icon
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
-        self._attr_name = f"{equip['nome']} {'Status API' if diag_type == 'conexao' else 'Última Sincronização'}"
+        self._attr_has_entity_name = False
+
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, equip["uuid"])})
 
     @property
     def native_value(self):
+        """Lê as propriedades restauradas do coordenador."""
         if self._diag_type == "conexao":
-            return "Conectado" if self.coordinator.last_sync_success else "Erro de Rede"
-        return self.coordinator.last_sync_time
+            # Usa a propriedade is_connected ou last_sync_success
+            return DIAG_CONEXAO_OK if self.coordinator.last_sync_success else DIAG_CONEXAO_ERR
+
+        elif self._diag_type == "sincro":
+            # Usa a propriedade last_sync_time
+            return self.coordinator.last_sync_time
+
+        elif self._diag_type == "fila":
+            # Usa a propriedade queue_size
+            return self.coordinator.queue_size
+
+        return None

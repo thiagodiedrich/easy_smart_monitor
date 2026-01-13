@@ -1,120 +1,152 @@
 import logging
-from datetime import timedelta, datetime
-import async_timeout
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.core import HomeAssistant, callback
-from .const import DOMAIN, DEFAULT_UPDATE_INTERVAL
+from homeassistant.helpers.update_coordinator import (
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
+from homeassistant.exceptions import ConfigEntryAuthFailed
+
+from .const import (
+    DOMAIN,
+    DEFAULT_UPDATE_INTERVAL,
+    ATTR_LAST_SYNC,
+    ATTR_QUEUE_SIZE,
+    DIAG_CONEXAO_OK,
+    DIAG_CONEXAO_ERR,
+    DIAG_PENDENTE,
+    TEST_MODE
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 class EasySmartCoordinator(DataUpdateCoordinator):
     """
-    Coordenador central da Easy Smart Monitor v1.0.10.
-    Gere o ciclo de vida dos dados e monitoriza a integridade da fila e da API.
+    Coordenador principal da integração Easy Smart Monitor.
+    Gerencia a sincronização de dados entre a fila local (Client) e o Home Assistant,
+    além de fornecer o estado de saúde para os sensores de diagnóstico.
     """
 
     def __init__(self, hass: HomeAssistant, client, update_interval: int):
         """
         Inicializa o coordenador.
 
-        :param hass: Instância do Home Assistant
-        :param client: Instância do EasySmartClient (client.py)
-        :param update_interval: Segundos entre sincronizações
+        :param hass: Instância do Home Assistant.
+        :param client: Instância do EasySmartClient (configurada no __init__.py).
+        :param update_interval: Tempo em segundos entre as tentativas de envio bulk.
         """
         self.client = client
         self.hass = hass
 
-        # Variáveis de Estado para Sensores de Diagnóstico
-        self.last_sync_success = True
-        self.last_sync_time = "Pendente"
-        self.consecutive_failures = 0
-        self.last_error_message = None
+        # Estado interno de diagnóstico
+        self._last_sync_success: bool = True
+        self._last_sync_time: str = "Aguardando..."
 
-        # Define o intervalo de atualização (mínimo de 10 segundos por segurança)
-        seconds = max(update_interval if update_interval else DEFAULT_UPDATE_INTERVAL, 10)
+        # Validação de intervalo mínimo para proteger o sistema (30s)
+        # Se update_interval for None ou menor que 30, força 30.
+        safe_interval = max(update_interval or 60, 30)
 
         super().__init__(
             hass,
             _LOGGER,
-            name=f"{DOMAIN}_coordinator",
-            update_interval=timedelta(seconds=seconds),
+            name=DOMAIN,
+            update_interval=timedelta(seconds=safe_interval),
         )
 
-    async def _async_update_data(self):
+        _LOGGER.debug(
+            "Coordinator inicializado. Intervalo de sincronia: %s segundos. Modo Teste: %s",
+            safe_interval,
+            TEST_MODE
+        )
+
+    async def _async_update_data(self) -> Dict[str, Any]:
         """
-        Ciclo de atualização principal.
-        Executa a sincronização da fila e atualiza as métricas de diagnóstico.
+        Método chamado automaticamente pelo HA a cada intervalo de tempo.
+        Tenta esvaziar a fila enviando dados para a API.
         """
-        _LOGGER.debug("Iniciando ciclo de processamento da fila via Coordenador.")
+        _LOGGER.debug("Iniciando ciclo de sincronização agendado (Fila atual: %s)", len(self.client.queue))
 
         try:
-            # Proteção global de 30 segundos para evitar travamento do event loop
-            async with async_timeout.timeout(30):
-                # O client.py agora retorna True se a fila foi enviada com sucesso
-                success = await self.client.sync_queue()
+            # Chama o método de sincronia do cliente (que lida com retries e auth)
+            success = await self.client.sync_queue()
 
-                if success:
-                    # Reset de métricas em caso de sucesso
-                    self.last_sync_success = True
-                    self.last_sync_time = datetime.now().strftime("%d/%m %H:%M:%S")
-                    self.consecutive_failures = 0
-                    self.last_error_message = None
-                    _LOGGER.info("Sincronização bulk concluída com sucesso às %s.", self.last_sync_time)
-                else:
-                    # Incremento de falhas
-                    self.last_sync_success = False
-                    self.consecutive_failures += 1
-                    self.last_error_message = "Falha de comunicação (verifique o servidor API)"
-                    _LOGGER.warning(
-                        "Falha na sincronização bulk. Tentativa consecutiva nº %s.",
-                        self.consecutive_failures
-                    )
+            # Atualiza os estados internos baseado no resultado
+            if success:
+                self._last_sync_success = True
+                self._last_sync_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                if len(self.client.queue) == 0:
+                    _LOGGER.debug("Sincronização OK. Fila limpa.")
+            else:
+                self._last_sync_success = False
+                _LOGGER.warning("Ciclo de sincronização falhou. Os dados permanecerão no disco para a próxima tentativa.")
 
-                # Coleta dados adicionais do cliente para os sensores
-                client_diag = self.client.get_diagnostics()
+            # Retorna o dicionário de dados que alimenta os sensores de diagnóstico
+            return self._get_diagnostics_payload()
 
-                # O retorno aqui alimenta o self.data do coordenador
-                return {
-                    "api_connected": self.last_sync_success,
-                    "last_sync": self.last_sync_time,
-                    "queue_size": client_diag.get("queue_size", 0),
-                    "failures": self.consecutive_failures,
-                    "host": client_diag.get("host")
-                }
-
-        except UpdateFailed as err:
-            self.last_sync_success = False
-            self.consecutive_failures += 1
-            _LOGGER.error("UpdateFailed no coordenador: %s", err)
-            raise err
-
+        except ConfigEntryAuthFailed as e:
+            # Erro específico de autenticação deve ser repassado para o HA pedir reconfiguração
+            self._last_sync_success = False
+            raise e
         except Exception as err:
-            # Captura erros inesperados sem tornar as entidades 'Unavailable'
-            self.last_sync_success = False
-            self.consecutive_failures += 1
-            self.last_error_message = str(err)
+            self._last_sync_success = False
+            _LOGGER.error("Erro crítico não tratado no Coordinator: %s", err)
+            raise UpdateFailed(f"Erro de comunicação com API: {err}") from err
 
-            _LOGGER.error("Erro inesperado no Coordenador: %s", err)
+    def _get_diagnostics_payload(self) -> Dict[str, Any]:
+        """Compila os dados de saúde do sistema para os sensores de diagnóstico."""
+        client_stats = self.client.get_diagnostics()
 
-            # Retorna o último estado conhecido para manter a interface funcional
-            return {
-                "api_connected": False,
-                "last_sync": self.last_sync_time,
-                "queue_size": len(self.client.queue),
-                "error": str(err)
-            }
+        return {
+            "status_conexao": DIAG_CONEXAO_OK if self._last_sync_success else DIAG_CONEXAO_ERR,
+            ATTR_LAST_SYNC: self._last_sync_time,
+            ATTR_QUEUE_SIZE: client_stats.get("queue_size", 0),
+            "api_host": client_stats.get("api_host", "Desconhecido"),
+            "authenticated": client_stats.get("is_authenticated", False),
+            "storage_path": client_stats.get("storage_location", "")
+        }
 
-    @callback
-    def async_add_telemetry(self, data: dict):
+    async def async_add_telemetry(self, data: Dict[str, Any]):
         """
-        Método thread-safe para os sensores injetarem dados na fila.
+        Recebe dados dos sensores (temperatura, porta, etc) e enfileira.
+        IMPORTANTE: Força uma atualização parcial da interface para mostrar
+        o aumento da fila instantaneamente, sem esperar o intervalo de poll.
         """
+        if not data:
+            return
+
+        # 1. Adiciona à fila e persiste no disco (via Client)
         self.client.add_to_queue(data)
 
-    async def force_sync(self):
-        """
-        Dispara uma sincronização imediata fora do intervalo programado.
-        """
-        _LOGGER.info("Sincronização manual solicitada via force_sync.")
-        await self.async_refresh()
+        # 2. Notifica o HA que o tamanho da fila mudou (Update Push)
+        # Isso faz o sensor de "Tamanho da Fila" atualizar na hora no Dashboard
+        self.async_set_updated_data(self._get_diagnostics_payload())
+
+        _LOGGER.debug(
+            "Telemetria adicionada: %s. Novo tamanho da fila: %s",
+            data.get('tipo'),
+            len(self.client.queue)
+        )
+
+    # --- Propriedades Auxiliares para Acesso Rápido pelas Entidades ---
+
+    @property
+    def last_sync_success(self) -> bool:
+        """Retorna True se a última conexão foi bem sucedida."""
+        return self._last_sync_success
+
+    @property
+    def last_sync_time(self) -> str:
+        """Retorna a string formatada da última sincronização."""
+        return self._last_sync_time
+
+    @property
+    def is_connected(self) -> bool:
+        """Atalho para verificar conexão."""
+        return self._last_sync_success
+
+    @property
+    def queue_size(self) -> int:
+        """Retorna o tamanho atual da fila."""
+        return len(self.client.queue)

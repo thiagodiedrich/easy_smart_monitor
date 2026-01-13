@@ -1,4 +1,4 @@
-"""Constantes para a integração Easy Smart Monitor."""
+"""Constantes exaustivas para a integração Easy Smart Monitor."""
 from homeassistant.const import (
     Platform,
     UnitOfTemperature,
@@ -9,44 +9,58 @@ from homeassistant.const import (
 )
 
 # Identificação da Integração
-DOMAIN = "easy_smart_monitor1"
+DOMAIN = "easy_smart_monitor"
 NAME = "Easy Smart Monitor"
-VERSION = "1.0.11"
+VERSION = "1.0.12"
+MANUFACTURER = "Easy Smart"
 
 # Modo de Operação
-# Se True: Simula sucesso na API (útil para testes de interface)
-# Se False: Tenta comunicação real com o servidor
-TEST_MODE = False
+# Se True: Habilita preenchimento automático e pula validação de rede no config_flow
+TEST_MODE = True
 
-# Chaves de Configuração (Salvas no entry.data e entry.options)
+# Chaves de Configuração (Core)
 CONF_API_HOST = "api_host"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_EQUIPMENTS = "equipments"
 CONF_UPDATE_INTERVAL = "update_interval"
 
-# Configurações de Rede e Sincronização (Fila)
-DEFAULT_UPDATE_INTERVAL = 60  # Segundos entre envios da fila para a API
-MAX_RETRIES = 5               # Máximo de tentativas de reenvio em caso de erro
-RETRY_DELAY = 10              # Segundos de espera entre tentativas de rede
-STORAGE_FILE = "easy_smart_monitor1_queue.json"
+# Chaves Internas de Equipamento e Sensores
+CONF_EQUIP_UUID = "uuid"
+CONF_EQUIP_NAME = "nome"
+CONF_EQUIP_LOCAL = "local"
+CONF_SENSORS = "sensors"
+CONF_SENSOR_UUID = "uuid"
+CONF_SENSOR_TYPE = "tipo"
+CONF_HA_ENTITY = "ha_entity_id"
+
+# Configurações de Fila e Rede
+DEFAULT_UPDATE_INTERVAL = 60
+MAX_RETRIES = 5
+RETRY_DELAY = 10
+STORAGE_FILE = "easy_smart_monitor_queue.json"
 
 # Plataformas Suportadas (v1.0.11)
-# Carregamos primeiro os controles para que os sensores já iniciem respeitando-os
+# A ordem garante que controles sejam criados antes dos sensores dependentes
 PLATFORMS: list[Platform] = [
-    Platform.SWITCH,         # Equipamento Ativo, Sirene Ativa
-    Platform.NUMBER,         # Intervalo de Coleta, Tempo de Porta
-    Platform.SENSOR,         # Temperatura, Energia, Diagnósticos
-    Platform.BINARY_SENSOR,  # Porta e Alerta de Sirene
+    Platform.SWITCH,
+    Platform.NUMBER,
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
 ]
 
-# Valores Padrão de Hardware e Lógica (v1.0.11)
-DEFAULT_INTERVALO_COLETA = 10    # Segundos (Mínimo recomendado para sensores)
-DEFAULT_TEMPO_PORTA_ABERTA = 120 # Segundos (Tempo antes de disparar sirene)
+# Definições de Hardware e Lógica Industrial (v1.0.11)
+CONF_ATIVO = "ativo"
+CONF_SIRENE_ATIVA = "sirene_ativa"
+CONF_INTERVALO_COLETA = "intervalo_coleta"
+CONF_TEMPO_PORTA = "tempo_porta"
+
+DEFAULT_INTERVALO_COLETA = 10
+DEFAULT_TEMPO_PORTA_ABERTA = 120
 DEFAULT_EQUIPAMENTO_ATIVO = True
 DEFAULT_SIRENE_ATIVA = True
 
-# Definições de Unidades de Medida
+# Mapeamento de Unidades de Medida Oficiais HA
 UNITS = {
     "temperatura": UnitOfTemperature.CELSIUS,
     "energia": UnitOfPower.WATT,
@@ -58,10 +72,10 @@ UNITS = {
 # Cabeçalhos de Comunicação API
 HEADERS = {
     "Content-Type": "application/json",
-    "User-Agent": f"EasySmartMonitor/{VERSION} (HomeAssistant)"
+    "User-Agent": f"EasySmartMonitor/{VERSION} (HomeAssistant; @thiagodiedrich)"
 }
 
-# Categorias de Sensores para Processamento Interno
+# Categorias e Tipos de Sensores
 SENSOR_TYPES = [
     "temperatura",
     "energia",
@@ -73,7 +87,11 @@ SENSOR_TYPES = [
     "sirene"
 ]
 
-# Mensagens de Diagnóstico
+# Estados de Diagnóstico (Traduções de Status)
 DIAG_CONEXAO_OK = "Conectado"
 DIAG_CONEXAO_ERR = "Erro de Rede"
 DIAG_PENDENTE = "Pendente"
+
+# Categorias de Entidades
+ATTR_LAST_SYNC = "last_sync"
+ATTR_QUEUE_SIZE = "queue_size"

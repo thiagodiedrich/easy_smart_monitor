@@ -5,6 +5,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers import selector
 
 from .const import (
     DOMAIN,
@@ -15,14 +16,15 @@ from .const import (
     DEFAULT_INTERVALO_COLETA,
     DEFAULT_TEMPO_PORTA_ABERTA,
     DEFAULT_EQUIPAMENTO_ATIVO,
-    DEFAULT_SIRENE_ATIVA
+    DEFAULT_SIRENE_ATIVA,
+    TEST_MODE
 )
 from .client import EasySmartClient
 
 _LOGGER = logging.getLogger(__name__)
 
 class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Gerencia o fluxo de configuração inicial e a criação do entry."""
+    """Gerencia o fluxo de configuração inicial."""
 
     VERSION = 1
 
@@ -32,10 +34,21 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.equipments = []
 
     async def async_step_user(self, user_input=None):
-        """Passo 1: Configuração das credenciais e conexão com o Servidor API."""
+        """Passo 1: Credenciais da API (Com preenchimento automático para TEST_MODE)."""
         errors = {}
+
+        # Valores padrão para facilitar o teste
+        default_host = "http://localhost:5000" if TEST_MODE else ""
+        default_user = "admin_teste" if TEST_MODE else ""
+        default_pass = "senha_teste" if TEST_MODE else ""
+
         if user_input is not None:
-            # Validação de conexão antes de prosseguir
+            if TEST_MODE:
+                _LOGGER.info("MODO TESTE ATIVO: Pulando validação real de API.")
+                self.data = user_input
+                return await self.async_step_add_equipment()
+
+            # Validação Real (Só ocorre se TEST_MODE for False)
             session = async_get_clientsession(self.hass)
             client = EasySmartClient(
                 user_input[CONF_API_HOST],
@@ -50,21 +63,22 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self.data = user_input
                     return await self.async_step_add_equipment()
                 errors["base"] = "invalid_auth"
-            except Exception:
+            except Exception as e:
+                _LOGGER.error("Erro de conexão no config_flow: %s", e)
                 errors["base"] = "cannot_connect"
 
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required(CONF_API_HOST): str,
-                vol.Required(CONF_USERNAME): str,
-                vol.Required(CONF_PASSWORD): str,
+                vol.Required(CONF_API_HOST, default=default_host): str,
+                vol.Required(CONF_USERNAME, default=default_user): str,
+                vol.Required(CONF_PASSWORD, default=default_pass): str,
             }),
             errors=errors,
         )
 
     async def async_step_add_equipment(self, user_input=None):
-        """Passo 2: Cadastro de um novo Freezer/Geladeira com valores default v1.0.11."""
+        """Passo 2: Cadastro de Freezer/Geladeira."""
         if user_input is not None:
             new_equip = {
                 "uuid": str(uuid.uuid4()),
@@ -82,13 +96,13 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="add_equipment",
             data_schema=vol.Schema({
-                vol.Required("nome"): str,
-                vol.Required("local"): str,
+                vol.Required("nome", default="Freezer Principal"): str,
+                vol.Required("local", default="Cozinha"): str,
             }),
         )
 
     async def async_step_add_sensor(self, user_input=None):
-        """Passo 3: Vínculo de sensores do Home Assistant ao equipamento atual."""
+        """Passo 3: Vínculo de sensores do Home Assistant."""
         if user_input is not None:
             current_equip = self.equipments[-1]
             current_equip["sensors"].append({
@@ -98,10 +112,11 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             })
 
             if user_input.get("add_another"):
+                # Se marcou o checkbox "Adicionar outro sensor", repete este passo
                 return await self.async_step_add_sensor()
 
-            # Pergunta se quer adicionar outro equipamento (Freezer) ou finalizar
-            return await self.async_show_menu(
+            # Se não, mostra o menu para decidir se cadastra outro equipamento ou finaliza
+            return self.async_show_menu(
                 step_id="post_add_menu",
                 menu_options=["add_equipment", "finalizar"]
             )
@@ -109,7 +124,9 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="add_sensor",
             data_schema=vol.Schema({
-                vol.Required("ha_entity_id"): cv.entity_id,
+                vol.Required("ha_entity_id"): selector.EntitySelector(
+                    selector.EntitySelectorConfig(multiple=False)
+                ),
                 vol.Required("tipo"): vol.In([
                     "temperatura", "energia", "tensao",
                     "corrente", "humidade", "porta"
@@ -118,10 +135,22 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }),
         )
 
+    async def async_step_post_add_menu(self, user_input=None):
+        """
+        Handler OBRIGATÓRIO para o menu 'post_add_menu'.
+        Processa a escolha do usuário: cadastrar novo equipamento ou finalizar.
+        """
+        if user_input == "add_equipment":
+            return await self.async_step_add_equipment()
+
+        # Se escolheu 'finalizar' ou qualquer outra coisa
+        return await self.async_step_finalizar()
+
     async def async_step_finalizar(self, user_input=None):
-        """Cria a entrada final no Home Assistant com todos os dados coletados."""
+        """Cria a entrada de configuração no HA."""
         self.data[CONF_EQUIPMENTS] = self.equipments
-        return self.async_create_entry(title="Easy Smart Server", data=self.data)
+        title = f"Easy Smart ({self.data.get(CONF_API_HOST, 'Local')})"
+        return self.async_create_entry(title=title, data=self.data)
 
     @staticmethod
     @callback
@@ -130,7 +159,7 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
-    """Gerencia o fluxo de opções (Configurar) após a integração estar instalada."""
+    """Gerencia as opções após a instalação (Manage Sensors)."""
 
     def __init__(self, config_entry):
         self.config_entry = config_entry
@@ -145,7 +174,7 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_change_interval(self, user_input=None):
-        """Altera o intervalo global de sincronia da fila com a API."""
+        """Altera o intervalo global de sincronia da fila."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
@@ -160,7 +189,7 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_manage_sensors(self, user_input=None):
-        """Inicia o gerenciamento de sensores de um equipamento específico."""
+        """Inicia o gerenciamento de sensores de um equipamento."""
         if user_input is not None:
             self.selected_equip_uuid = user_input["equip_uuid"]
             return await self.async_step_sensor_action_menu()
@@ -174,14 +203,14 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_sensor_action_menu(self, user_input=None):
-        """Menu de ações para os sensores do equipamento selecionado."""
+        """Menu de ações para sensores."""
         return self.async_show_menu(
             step_id="sensor_action",
             menu_options=["add_sensor_to_equip", "remove_sensor_from_equip", "init"]
         )
 
     async def async_step_add_sensor_to_equip(self, user_input=None):
-        """Adiciona um novo sensor a um equipamento já cadastrado."""
+        """Adiciona um sensor a um equipamento existente."""
         if user_input is not None:
             for equip in self.updated_data[CONF_EQUIPMENTS]:
                 if equip["uuid"] == self.selected_equip_uuid:
@@ -191,30 +220,29 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
                         "tipo": user_input["tipo"]
                     })
                     break
-
             self.hass.config_entries.async_update_entry(self.config_entry, data=self.updated_data)
             return await self.async_step_sensor_action_menu()
 
         return self.async_show_form(
             step_id="add_sensor_to_equip",
             data_schema=vol.Schema({
-                vol.Required("ha_entity_id"): cv.entity_id,
+                vol.Required("ha_entity_id"): selector.EntitySelector(
+                    selector.EntitySelectorConfig(multiple=False)
+                ),
                 vol.Required("tipo"): vol.In(["temperatura", "energia", "tensao", "corrente", "humidade", "porta"]),
             }),
         )
 
     async def async_step_remove_sensor_from_equip(self, user_input=None):
-        """Remove um sensor específico de um equipamento."""
+        """Remove um sensor de um equipamento."""
         if user_input is not None:
             for equip in self.updated_data[CONF_EQUIPMENTS]:
                 if equip["uuid"] == self.selected_equip_uuid:
                     equip["sensors"] = [s for s in equip["sensors"] if s["uuid"] != user_input["sensor_uuid"]]
                     break
-
             self.hass.config_entries.async_update_entry(self.config_entry, data=self.updated_data)
             return await self.async_step_sensor_action_menu()
 
-        # Localiza os sensores do equipamento selecionado
         current_sensors = {}
         for equip in self.updated_data[CONF_EQUIPMENTS]:
             if equip["uuid"] == self.selected_equip_uuid:
@@ -229,7 +257,7 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_add_more_equipment(self, user_input=None):
-        """Adiciona um novo equipamento completo à configuração existente."""
+        """Adiciona novo equipamento completo."""
         if user_input is not None:
             new_equip = {
                 "uuid": str(uuid.uuid4()),
@@ -255,7 +283,7 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_remove_equipment(self, user_input=None):
-        """Remove um equipamento inteiro e todos os seus sensores."""
+        """Remove equipamento inteiro."""
         if user_input is not None:
             self.updated_data[CONF_EQUIPMENTS] = [
                 e for e in self.updated_data[CONF_EQUIPMENTS]
