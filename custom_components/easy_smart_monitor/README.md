@@ -1,7 +1,7 @@
-# 🧊 Easy Smart Monitor v1.2.0
+# 🧊 Easy Smart Monitor v1.3.0
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![version](https://img.shields.io/badge/version-1.2.0-green.svg)](https://github.com/thiagodiedrich/easy_smart_monitor)
+[![version](https://img.shields.io/badge/version-1.3.0-green.svg)](https://github.com/thiagodiedrich/easy_smart_monitor)
 [![maintainer](https://img.shields.io/badge/maintainer-@thiagodiedrich-blue.svg)](https://github.com/thiagodiedrich)
 
 **Integração profissional para monitoramento industrial de freezers, geladeiras e câmaras frias no Home Assistant.**
@@ -47,7 +47,7 @@ Cada equipamento adicionado ao Easy Smart Monitor gera automaticamente um dispos
 * Acesso à pasta `custom_components`.
 
 ### Passo a Passo
-1.  Baixe o código fonte da versão mais recente (v1.2.0).
+1.  Baixe o código fonte da versão mais recente (v1.3.0).
 2.  Copie a pasta **`easy_smart_monitor`** para dentro do diretório `/config/custom_components/` do seu Home Assistant.
 3.  **Reinicie o Home Assistant**.
 4.  Vá em **Configurações > Dispositivos e Serviços > Adicionar Integração**.
@@ -71,6 +71,12 @@ Para adicionar novos freezers ou remover sensores, clique em **Configurar** no c
 ---
 
 ## 📝 Changelog
+
+### v1.3.0 (Release)
+* [x] **Compressão de Dados:** Implementação de GZIP para telemetria bulk, reduzindo o consumo de banda em até 85%.
+* [x] **Diagnóstico Inteligente:** Refinamento do status `Timeout/Retry` e detecção automática de "Falha de Internet" vs "Falha de Servidor".
+* [x] **Unificação de Motores:** Timer robusto unificado para evitar sobreposição de ciclos de sincronização.
+* [x] **Estabilidade:** Correção de erros de inicialização e melhoria no tratamento de exceções de rede.
 
 ### v1.2.0 (Estável)
 * [x] **Diagnóstico Inteligente:** Novo status `Timeout/Retry` para feedback visual imediato durante tentativas de conexão.

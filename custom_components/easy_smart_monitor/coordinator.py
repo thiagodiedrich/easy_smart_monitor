@@ -62,7 +62,6 @@ class EasySmartCoordinator(DataUpdateCoordinator):
             _LOGGER,
             name=f"{DOMAIN}_coordinator",
             update_interval=None, # Desativamos o poll padrão para usar apenas nosso timer robusto
-            request_timeout=300,
         )
 
         # Timer dedicado para garantir o envio para a API
