@@ -46,10 +46,9 @@ class EasySmartCoordinator(DataUpdateCoordinator):
         # Estado interno de diagnóstico
         self._last_status = DIAG_CONEXAO_OK
         self._last_sync_success: bool = True
+        self._is_syncing = False # Trava para evitar sobreposição de ciclos
 
         # Validação de intervalo mínimo para proteger o sistema (60s)
-        # Se update_interval for None ou menor que 60, assume 60 para não prejudicar 
-        # o desempenho do Home Assistant e da API Cloud (Online).
         if update_interval is None:
             safe_interval = 60
         else:
@@ -62,12 +61,11 @@ class EasySmartCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=f"{DOMAIN}_coordinator",
-            update_interval=timedelta(seconds=safe_interval),
-            request_timeout=300, # Aumentado para 5 minutos para suportar as 5 retentativas da API
+            update_interval=None, # Desativamos o poll padrão para usar apenas nosso timer robusto
+            request_timeout=300,
         )
 
-        # Timer dedicado para garantir o envio para a API mesmo se os sensores 
-        # de diagnóstico não estiverem sendo visualizados no dashboard.
+        # Timer dedicado para garantir o envio para a API
         self._unsub_sync_timer = async_track_time_interval(
             self.hass,
             self._timer_sync_queue,
@@ -82,7 +80,9 @@ class EasySmartCoordinator(DataUpdateCoordinator):
 
     async def _timer_sync_queue(self, now=None):
         """Dispara o ciclo de sincronização via timer externo."""
-        _LOGGER.debug("Timer robusto disparado: Iniciando sincronização da fila.")
+        if self._is_syncing:
+            _LOGGER.debug("Sincronização já em andamento, pulando este ciclo do timer.")
+            return
         await self.async_refresh()
 
     async def _async_update_data(self) -> Dict[str, Any]:
@@ -90,54 +90,53 @@ class EasySmartCoordinator(DataUpdateCoordinator):
         Método chamado automaticamente pelo HA a cada intervalo de tempo.
         Tenta esvaziar a fila enviando dados para a API.
         """
-        _LOGGER.info("Executando ciclo de sincronização agendado (Fila: %s itens, Intervalo: %ss)", 
-                     len(self.client.queue), self.update_interval.total_seconds() if self.update_interval else "N/A")
+        if self._is_syncing:
+            return self._get_diagnostics_payload()
+        
+        self._is_syncing = True
+        _LOGGER.info("Iniciando ciclo de sincronização (Fila: %s itens)", len(self.client.queue))
 
-        # 1. Muda status para Timeout/Retry no início do ciclo (feedback imediato)
+        # 1. Muda status para Timeout/Retry no início do ciclo
         self._last_status = DIAG_TIMEOUT_RETRY
         self.async_set_updated_data(self._get_diagnostics_payload())
 
         try:
-            # Chama o método de sincronia do cliente (que lida com retries e auth)
+            # Chama o método de sincronia do cliente
             success = await self.client.sync_queue()
 
             # Atualiza os estados internos baseado no resultado
             if success:
                 self._last_status = DIAG_CONEXAO_OK
                 self._last_sync_success = True
-                if len(self.client.queue) == 0:
-                    _LOGGER.debug("Sincronização OK. Fila limpa.")
+                _LOGGER.info("Sincronização finalizada com SUCESSO.")
             else:
                 self._last_sync_success = False
                 # 2. Se falhar, verifica se o problema é a Internet ou o Servidor
                 if await self.client.check_internet():
                     self._last_status = DIAG_SERVER_ERR
-                    _LOGGER.warning("Internet OK, mas API fora do ar (Falha de Servidor).")
+                    _LOGGER.warning("Ciclo finalizado com erro: FALHA DE SERVIDOR (Internet OK).")
                 else:
                     self._last_status = DIAG_INTERNET_ERR
-                    _LOGGER.warning("Sem conexão com a Internet (Falha de Internet).")
+                    _LOGGER.warning("Ciclo finalizado com erro: FALHA DE INTERNET.")
 
-            # Retorna o dicionário de dados que alimenta os sensores de diagnóstico
             return self._get_diagnostics_payload()
 
         except ConfigEntryAuthFailed as e:
-            # Erro específico de autenticação deve ser repassado para o HA pedir reconfiguração
             self._last_sync_success = False
             self._last_status = DIAG_SERVER_ERR
             raise e
         except Exception as err:
             self._last_sync_success = False
-            # Verifica internet em caso de exceção desconhecida ou Timeout do HA
             if await self.client.check_internet():
                 self._last_status = DIAG_SERVER_ERR
-                _LOGGER.error("Falha de comunicação com o servidor Easy Smart: %s", err)
             else:
                 self._last_status = DIAG_INTERNET_ERR
-                _LOGGER.error("Falha de conexão com a internet detectada: %s", err)
-            
-            # Não levantamos UpdateFailed aqui para permitir que o sensor mostre o estado de erro
-            # em vez de ficar "Indisponível" ou travado no status anterior.
+            _LOGGER.error("Erro crítico no ciclo de sincronização: %s", err)
             return self._get_diagnostics_payload()
+        finally:
+            self._is_syncing = False
+            # Força uma atualização final para garantir que o status de erro apareça
+            self.async_set_updated_data(self._get_diagnostics_payload())
 
     def _get_diagnostics_payload(self) -> Dict[str, Any]:
         """Compila os dados de saúde do sistema para os sensores de diagnóstico."""

@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import json
+import gzip
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
@@ -154,10 +155,30 @@ class EasySmartClient:
 
                     _LOGGER.debug("Tentativa de envio bulk %s/%s para %s", attempts + 1, MAX_RETRIES, url)
 
+                    # Comprime os dados com GZIP para reduzir tamanho (70-85% de redução)
+                    json_data = json.dumps(self.queue).encode('utf-8')
+                    compressed_data = gzip.compress(json_data, compresslevel=6)
+                    
+                    # Adiciona header indicando que os dados estão comprimidos
+                    compressed_headers = {
+                        **auth_headers,
+                        "Content-Encoding": "gzip",
+                        "Content-Type": "application/json"
+                    }
+                    
+                    original_size = len(json_data)
+                    compressed_size = len(compressed_data)
+                    compression_ratio = (1 - compressed_size / original_size) * 100 if original_size > 0 else 0
+                    
+                    _LOGGER.debug(
+                        "Dados comprimidos: %s bytes → %s bytes (%.1f%% reduzido)",
+                        original_size, compressed_size, compression_ratio
+                    )
+
                     async with self.session.post(
                         url,
-                        json=self.queue,
-                        headers=auth_headers,
+                        data=compressed_data,
+                        headers=compressed_headers,
                         timeout=25
                     ) as response:
                         self._last_communication_time = datetime.now()
