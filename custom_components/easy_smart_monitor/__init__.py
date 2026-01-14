@@ -85,17 +85,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # -------------------------------------------------------------------------
     # 4. Inicialização do Coordinator
     # -------------------------------------------------------------------------
-    # Tenta buscar das opções (menu Ajuste Fino) ou dos dados (migração/setup)
-    update_interval = entry.options.get(CONF_UPDATE_INTERVAL) or entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+    # Prioridade 1: Opções (Menu Ajuste Fino)
+    # Prioridade 2: Dados da entrada (Config inicial)
+    # Prioridade 3: Padrão do sistema (const.py)
+    update_interval = entry.options.get(CONF_UPDATE_INTERVAL) or \
+                      entry.data.get(CONF_UPDATE_INTERVAL) or \
+                      DEFAULT_UPDATE_INTERVAL
 
     _LOGGER.info(
-        "Inicializando Coordinator para %s. Intervalo de Sincronia: %s segundos. Opções: %s", 
+        "Iniciando Easy Smart Monitor [%s]. Intervalo de Envio Cloud: %s segundos.", 
         entry.title, 
-        update_interval,
-        entry.options
+        update_interval
     )
 
-    coordinator = EasySmartCoordinator(hass, client, update_interval)
+    coordinator = EasySmartCoordinator(hass, client, int(update_interval))
 
     # Primeira sincronização
     try:
@@ -152,20 +155,18 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Gerencia atualizações de opções sem necessariamente recarregar tudo."""
-    _LOGGER.debug("Atualização de configurações detectada para %s", entry.title)
-    
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    
+    """Gerencia atualizações de opções em tempo de execução."""
+    coordinator = hass.data[DOMAIN].get(entry.entry_id)
+    if not coordinator:
+        return
+
     # 1. Atualiza o intervalo do Coordinator dinamicamente se mudou nas opções
     new_interval = entry.options.get(CONF_UPDATE_INTERVAL)
-    if new_interval and int(new_interval) != coordinator.update_interval_seconds:
-        coordinator.update_interval_seconds = int(new_interval)
-        _LOGGER.info("Intervalo Cloud (API) atualizado em tempo de execução para %s segundos.", new_interval)
-        # Se foi APENAS o intervalo que mudou, não precisamos de um reload completo
-        # No entanto, o HA recomenda o reload se houver mudanças estruturais.
+    if new_interval:
+        new_interval_int = int(new_interval)
+        if new_interval_int != coordinator.update_interval_seconds:
+            coordinator.update_interval_seconds = new_interval_int
+            _LOGGER.info("Intervalo Cloud (API) alterado dinamicamente para %s segundos.", new_interval_int)
     
-    # Se houver mudanças nos equipamentos (que ficam em data), o reload é obrigatório
-    # Para simplificar e garantir que todos os sensores reflitam as mudanças,
-    # mantemos o reload, mas a atualização dinâmica acima já garante o tempo imediato.
+    # Força o reload para garantir que outras mudanças (como novos sensores) sejam aplicadas
     await hass.config_entries.async_reload(entry.entry_id)

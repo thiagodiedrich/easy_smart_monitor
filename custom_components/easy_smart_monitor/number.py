@@ -4,7 +4,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    DEFAULT_INTERVALO_COLETA,
+    DEFAULT_TEMPO_PORTA_ABERTA
+)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator = hass.data[DOMAIN][entry.entry_id]
@@ -44,10 +48,10 @@ class EasySmartNumber(NumberEntity):
     def native_value(self) -> float:
         for e in self.entry.data.get("equipments", []):
             if e["uuid"] == self.equip["uuid"]:
-                # Retorna o valor salvo ou o padrão (10 para coleta, 120 para porta)
-                default = 120 if self.key == "tempo_porta" else 10
+                # Retorna o valor salvo ou o padrão das constantes
+                default = DEFAULT_TEMPO_PORTA_ABERTA if self.key == "tempo_porta" else DEFAULT_INTERVALO_COLETA
                 return e.get(self.key, default)
-        return 10
+        return DEFAULT_INTERVALO_COLETA
 
     async def async_set_native_value(self, value: float):
         new_data = dict(self.entry.data)

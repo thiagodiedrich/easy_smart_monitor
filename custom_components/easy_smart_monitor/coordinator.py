@@ -56,12 +56,12 @@ class EasySmartCoordinator(DataUpdateCoordinator):
         super().__init__(
             hass,
             _LOGGER,
-            name=DOMAIN,
+            name=f"{DOMAIN}_coordinator",
             update_interval=timedelta(seconds=safe_interval),
         )
 
         _LOGGER.info(
-            "Coordinator [%s] inicializado. Intervalo de sincronia (API): %s segundos.",
+            "Coordenador API Cloud [%s] inicializado. Ciclo de envio: %s segundos.",
             DOMAIN,
             safe_interval
         )
