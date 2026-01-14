@@ -42,7 +42,6 @@ class EasySmartCoordinator(DataUpdateCoordinator):
 
         # Estado interno de diagnóstico
         self._last_sync_success: bool = True
-        self._last_sync_time: str = "Aguardando..."
 
         # Validação de intervalo mínimo para proteger o sistema (30s)
         # Se update_interval for None ou menor que 30, força o padrão.
@@ -81,7 +80,6 @@ class EasySmartCoordinator(DataUpdateCoordinator):
             # Atualiza os estados internos baseado no resultado
             if success:
                 self._last_sync_success = True
-                self._last_sync_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                 if len(self.client.queue) == 0:
                     _LOGGER.debug("Sincronização OK. Fila limpa.")
             else:
@@ -106,7 +104,7 @@ class EasySmartCoordinator(DataUpdateCoordinator):
 
         return {
             "status_conexao": DIAG_CONEXAO_OK if self._last_sync_success else DIAG_CONEXAO_ERR,
-            ATTR_LAST_SYNC: self._last_sync_time,
+            ATTR_LAST_SYNC: client_stats.get("last_communication", "Aguardando..."),
             ATTR_QUEUE_SIZE: client_stats.get("queue_size", 0),
             "api_host": client_stats.get("api_host", "Desconhecido"),
             "authenticated": client_stats.get("is_authenticated", False),
@@ -145,7 +143,7 @@ class EasySmartCoordinator(DataUpdateCoordinator):
     @property
     def last_sync_time(self) -> str:
         """Retorna a string formatada da última sincronização."""
-        return self._last_sync_time
+        return self.client.get_diagnostics().get("last_communication", "Aguardando...")
 
     @property
     def is_connected(self) -> bool:

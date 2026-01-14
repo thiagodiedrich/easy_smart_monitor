@@ -44,6 +44,9 @@ class EasySmartClient:
         # Lock de concorrência para evitar que múltiplos envios ocorram simultaneamente
         self._lock = asyncio.Lock()
 
+        # Registro de última comunicação
+        self._last_communication_time: Optional[datetime] = None
+
         _LOGGER.debug("Cliente Easy Smart inicializado. Caminho de armazenamento: %s", self.storage_path)
 
     async def authenticate(self) -> bool:
@@ -51,6 +54,7 @@ class EasySmartClient:
         if TEST_MODE:
             _LOGGER.info("MODO TESTE: Simulando sucesso na autenticação.")
             self.token = "token_teste_v10_estavel"
+            self._last_communication_time = datetime.now()
             return True
 
         url = f"{self.host}/auth/login"
@@ -62,6 +66,7 @@ class EasySmartClient:
         _LOGGER.debug("Enviando requisição de login para: %s", url)
         try:
             async with self.session.post(url, json=payload, timeout=15) as response:
+                self._last_communication_time = datetime.now()
                 if response.status == 200:
                     data = await response.json()
                     self.token = data.get("access_token")
@@ -110,6 +115,7 @@ class EasySmartClient:
         async with self._lock:
             if TEST_MODE:
                 _LOGGER.info("MODO TESTE: Simulação de envio bulk de %s itens concluída.", len(self.queue))
+                self._last_communication_time = datetime.now()
                 self.queue.clear()
                 self._save_queue_to_disk()
                 return True
@@ -136,6 +142,7 @@ class EasySmartClient:
                         headers=auth_headers,
                         timeout=25
                     ) as response:
+                        self._last_communication_time = datetime.now()
 
                         if response.status in [200, 201]:
                             _LOGGER.info("Sucesso! %s eventos de telemetria enviados para a API central.", len(self.queue))
@@ -215,5 +222,6 @@ class EasySmartClient:
             "is_authenticated": self.token is not None,
             "api_host": self.host,
             "test_mode": TEST_MODE,
-            "storage_location": self.storage_path
+            "storage_location": self.storage_path,
+            "last_communication": self._last_communication_time.strftime("%d/%m/%Y %H:%M:%S") if self._last_communication_time else "Aguardando..."
         }
