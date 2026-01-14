@@ -81,6 +81,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         password = password or "senha_teste"
 
     client = EasySmartClient(api_host, username, password, session, hass)
+    
+    # Carrega a fila persistida no disco ANTES de iniciar o coordinator
+    await client.load_queue_from_disk()
 
     # -------------------------------------------------------------------------
     # 4. Inicialização do Coordinator
@@ -148,6 +151,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Descarrega a integração."""
+    coordinator = hass.data[DOMAIN].get(entry.entry_id)
+    if coordinator and hasattr(coordinator, 'client'):
+        # Garante que qualquer dado na fila seja persistido antes de descarregar
+        coordinator.client._save_queue_to_disk()
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)

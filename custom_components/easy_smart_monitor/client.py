@@ -181,7 +181,8 @@ class EasySmartClient:
     def _save_queue_to_disk(self):
         """
         Gravação robusta da fila usando helpers oficiais do HA.
-        Resolve problemas de permissão e latência de I/O em containers.
+        O arquivo físico NUNCA é removido pelo sistema, apenas seu conteúdo
+        é limpo (definido como vazio) após a confirmação de envio para a API.
         """
         try:
             storage_dir = os.path.dirname(self.storage_path)

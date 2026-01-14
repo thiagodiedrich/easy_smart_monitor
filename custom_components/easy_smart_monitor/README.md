@@ -1,7 +1,7 @@
-# 🧊 Easy Smart Monitor v1.0.17
+# 🧊 Easy Smart Monitor v1.0.18
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![version](https://img.shields.io/badge/version-1.0.17-green.svg)](https://github.com/thiagodiedrich/easy_smart_monitor)
+[![version](https://img.shields.io/badge/version-1.0.18-green.svg)](https://github.com/thiagodiedrich/easy_smart_monitor)
 [![maintainer](https://img.shields.io/badge/maintainer-@thiagodiedrich-blue.svg)](https://github.com/thiagodiedrich)
 
 **Integração profissional para monitoramento industrial de freezers, geladeiras e câmaras frias no Home Assistant.**
@@ -47,7 +47,7 @@ Cada equipamento adicionado ao Easy Smart Monitor gera automaticamente um dispos
 * Acesso à pasta `custom_components`.
 
 ### Passo a Passo
-1.  Baixe o código fonte da versão mais recente (v1.0.17).
+1.  Baixe o código fonte da versão mais recente (v1.0.18).
 2.  Copie a pasta **`easy_smart_monitor`** para dentro do diretório `/config/custom_components/` do seu Home Assistant.
 3.  **Reinicie o Home Assistant**.
 4.  Vá em **Configurações > Dispositivos e Serviços > Adicionar Integração**.
@@ -71,6 +71,16 @@ Para adicionar novos freezers ou remover sensores, clique em **Configurar** no c
 ---
 
 ## 📝 Changelog
+
+### v1.0.18 (Estável)
+* [x] **Segurança de Dados:** Travas de segurança para evitar intervalos de coleta (<30s) e envio (<60s) muito baixos.
+* [x] **Persistência Total:** A fila de dados agora é carregada no boot e salva no encerramento, garantindo que nenhum dado seja perdido.
+* [x] **Gestão de Configuração:** O intervalo de envio global agora é salvo nativamente no Home Assistant e respeitado em tempo de execução.
+* [x] **Limpeza de Código:** Remoção de variáveis redundantes e melhoria nos comentários internos.
+
+### v1.0.17 (Estável)
+* [x] **Intervalos de Coleta:** Correção na aplicação do tempo de coleta e sincronia com a UI.
+* [x] **Traduções:** Adição de suporte a PT-BR e EN-US para todos os tipos de sensores.
 
 ### v1.0.16 (Estável)
 * [x] **Gestão de Intervalos:** Separação clara entre Intervalo de Coleta Local e Intervalo de Envio Cloud.
