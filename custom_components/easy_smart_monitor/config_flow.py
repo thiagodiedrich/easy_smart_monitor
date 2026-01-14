@@ -147,6 +147,8 @@ class EasySmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_finalizar(self, user_input=None):
         self.data[CONF_EQUIPMENTS] = self.equipments
+        # Define o intervalo padrão na criação para ser salvo no Home Assistant
+        self.data[CONF_UPDATE_INTERVAL] = DEFAULT_UPDATE_INTERVAL
         title = f"Easy Smart ({self.data.get(CONF_API_HOST, 'Local')})"
         return self.async_create_entry(title=title, data=self.data)
 
@@ -183,16 +185,20 @@ class EasySmartOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_change_interval(self, user_input=None):
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            # Trava de segurança: Mínimo de 60 segundos para não prejudicar o desempenho do Home Assistant e da API Cloud
+            interval = max(int(user_input.get(CONF_UPDATE_INTERVAL, 60)), 60)
+            self.updated_data[CONF_UPDATE_INTERVAL] = interval
+            # Salva diretamente no entry.data do Home Assistant e recarrega
+            self.hass.config_entries.async_update_entry(self.config_entry, data=self.updated_data)
+            return self.async_create_entry(title="", data={})
 
-        current_interval = self.config_entry.options.get(CONF_UPDATE_INTERVAL) or \
-                          self.config_entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+        current_interval = self.updated_data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
                           
         return self.async_show_form(
             step_id="change_interval",
             data_schema=vol.Schema({
                 vol.Optional(CONF_UPDATE_INTERVAL, default=current_interval):
-                    vol.All(vol.Coerce(int), vol.Range(min=10, max=3600)),
+                    vol.All(vol.Coerce(int), vol.Range(min=60, max=3600)),
             }),
         )
 

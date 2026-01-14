@@ -85,12 +85,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # -------------------------------------------------------------------------
     # 4. Inicialização do Coordinator
     # -------------------------------------------------------------------------
-    # Prioridade 1: Opções (Menu Ajuste Fino)
-    # Prioridade 2: Dados da entrada (Config inicial)
-    # Prioridade 3: Padrão do sistema (const.py)
-    update_interval = entry.options.get(CONF_UPDATE_INTERVAL) or \
-                      entry.data.get(CONF_UPDATE_INTERVAL) or \
-                      DEFAULT_UPDATE_INTERVAL
+    # Prioridade 1: Dados da entrada (Config salva no HA)
+    # Prioridade 2: Padrão do sistema (const.py)
+    # Trava de segurança: Mínimo de 60 segundos para não prejudicar o desempenho do Home Assistant e da API Cloud
+    raw_interval = entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+    update_interval = max(int(raw_interval), 60)
 
     _LOGGER.info(
         "Iniciando Easy Smart Monitor [%s]. Intervalo de Envio Cloud: %s segundos.", 
@@ -156,17 +155,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Gerencia atualizações de opções em tempo de execução."""
-    coordinator = hass.data[DOMAIN].get(entry.entry_id)
-    if not coordinator:
-        return
-
-    # 1. Atualiza o intervalo do Coordinator dinamicamente se mudou nas opções
-    new_interval = entry.options.get(CONF_UPDATE_INTERVAL)
-    if new_interval:
-        new_interval_int = int(new_interval)
-        if new_interval_int != coordinator.update_interval_seconds:
-            coordinator.update_interval_seconds = new_interval_int
-            _LOGGER.info("Intervalo Cloud (API) alterado dinamicamente para %s segundos.", new_interval_int)
-    
-    # Força o reload para garantir que outras mudanças (como novos sensores) sejam aplicadas
+    # Como agora salvamos tudo em entry.data e chamamos async_reload manualmente
+    # no config_flow, este listener pode apenas forçar o reload se algo vier via options
+    # ou ser mantido para compatibilidade.
     await hass.config_entries.async_reload(entry.entry_id)

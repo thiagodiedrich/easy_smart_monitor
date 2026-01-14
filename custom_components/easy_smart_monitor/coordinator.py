@@ -43,15 +43,16 @@ class EasySmartCoordinator(DataUpdateCoordinator):
         # Estado interno de diagnóstico
         self._last_sync_success: bool = True
 
-        # Validação de intervalo mínimo para proteger o sistema (30s)
-        # Se update_interval for None ou menor que 30, força o padrão.
+        # Validação de intervalo mínimo para proteger o sistema (60s)
+        # Se update_interval for None ou menor que 60, assume 60 para não prejudicar 
+        # o desempenho do Home Assistant e da API Cloud (Online).
         if update_interval is None:
-            safe_interval = DEFAULT_UPDATE_INTERVAL
+            safe_interval = 60
         else:
             try:
-                safe_interval = max(int(update_interval), 30)
+                safe_interval = max(int(update_interval), 60)
             except (ValueError, TypeError):
-                safe_interval = DEFAULT_UPDATE_INTERVAL
+                safe_interval = 60
 
         super().__init__(
             hass,
@@ -163,6 +164,8 @@ class EasySmartCoordinator(DataUpdateCoordinator):
     @update_interval_seconds.setter
     def update_interval_seconds(self, value: int):
         """Atualiza o intervalo de atualização dinamicamente."""
-        safe_interval = max(int(value), 30)
+        # Se o valor for menor que 60 segundos, assume 60 para não prejudicar 
+        # o desempenho do Home Assistant e da API Cloud (Online).
+        safe_interval = max(int(value), 60)
         self.update_interval = timedelta(seconds=safe_interval)
         _LOGGER.info("Intervalo de atualização do Coordinator [%s] ajustado para %s segundos.", self.name, safe_interval)
