@@ -11,7 +11,7 @@ from homeassistant.const import (
 # Identificação da Integração
 DOMAIN = "easy_smart_monitor"
 NAME = "Easy Smart Monitor"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 MANUFACTURER = "Easy Smart"
 
 # Modo de Operação
@@ -91,7 +91,12 @@ SENSOR_TYPES = [
 # Estados de Diagnóstico (Traduções de Status)
 DIAG_CONEXAO_OK = "Conectado"
 DIAG_CONEXAO_ERR = "Erro de Rede"
+DIAG_SERVER_ERR = "Erro de Servidor"
+DIAG_TIMEOUT_RETRY = "Timeout/Retry"
 DIAG_PENDENTE = "Pendente"
+
+# Teste de Conectividade (Ping)
+DEFAULT_PING_HOST = "8.8.8.8"
 
 # Categorias de Entidades
 ATTR_LAST_SYNC = "last_sync"

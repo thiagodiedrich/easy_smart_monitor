@@ -26,6 +26,8 @@ from .const import (
     DEFAULT_EQUIPAMENTO_ATIVO,
     DIAG_CONEXAO_OK,
     DIAG_CONEXAO_ERR,
+    DIAG_SERVER_ERR,
+    DIAG_TIMEOUT_RETRY,
     ATTR_LAST_SYNC,
     ATTR_QUEUE_SIZE
 )
@@ -34,7 +36,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """
-    Configura os sensores de telemetria e diagnóstico v1.1.0.
+    Configura os sensores de telemetria e diagnóstico v1.2.0.
     """
     coordinator = hass.data[DOMAIN][entry.entry_id]
     equipments = entry.data.get(CONF_EQUIPMENTS, [])
@@ -101,7 +103,7 @@ class EasySmartTelemetrySensor(SensorEntity):
             identifiers={(DOMAIN, equip["uuid"])},
             name=equip["nome"],
             manufacturer="Easy Smart",
-            model="Monitor Industrial v1.1.0",
+            model="Monitor Industrial v1.2.0",
             suggested_area=equip.get("local"),
         )
 
@@ -251,8 +253,8 @@ class EasySmartDiagnosticSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         """Lê as propriedades restauradas do coordenador."""
         if self._diag_type == "conexao":
-            # Usa a propriedade is_connected ou last_sync_success
-            return DIAG_CONEXAO_OK if self.coordinator.last_sync_success else DIAG_CONEXAO_ERR
+            # Retorna o status real (Conectado, Erro de Rede, Erro de Servidor ou Timeout/Retry)
+            return self.coordinator.data.get("status_conexao", DIAG_CONEXAO_ERR) if self.coordinator.data else DIAG_CONEXAO_ERR
 
         elif self._diag_type == "sincro":
             # Usa a propriedade last_sync_time

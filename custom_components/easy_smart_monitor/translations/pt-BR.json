@@ -136,7 +136,16 @@
       "corrente": { "name": "Corrente" },
       "umidade": { "name": "Umidade" },
       "status": { "name": "Status" },
-      "conexao": { "name": "Status Conexão API" },
+      "conexao": { 
+        "name": "Status Conexão API",
+        "state": {
+          "Conectado": "Conectado",
+          "Erro de Rede": "Erro de Rede",
+          "Erro de Servidor": "Erro de Servidor",
+          "Timeout/Retry": "Timeout/Retry",
+          "Pendente": "Pendente"
+        }
+      },
       "sincro": { "name": "Última Sincronização" },
       "fila": { "name": "Fila de Envio" }
     },

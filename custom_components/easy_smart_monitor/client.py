@@ -17,7 +17,8 @@ from .const import (
     TEST_MODE,
     MAX_RETRIES,
     RETRY_DELAY,
-    HEADERS
+    HEADERS,
+    DEFAULT_PING_HOST
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,14 +78,28 @@ class EasySmartClient:
                     "Falha na autenticação. Status: %s. Verifique se as credenciais estão corretas.",
                     response.status
                 )
-        except asyncio.TimeoutError:
-            _LOGGER.error("Timeout durante a tentativa de autenticação. Servidor API lento ou inacessível.")
-        except aiohttp.ClientError as e:
-            _LOGGER.error("Erro de conexão durante a autenticação: %s", e)
+        except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+            # Não logamos erro aqui pois o Coordinator tratará a lógica de diagnóstico
+            pass
         except Exception as e:
             _LOGGER.error("Erro inesperado no processo de login: %s", e)
 
         return False
+
+    async def check_internet(self) -> bool:
+        """Verifica se há conectividade com a internet básica."""
+        try:
+            # Tenta uma conexão simples na porta 53 (DNS) ou 80 do host de ping
+            # Usando timeout curto para ser rápido
+            import socket
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None, 
+                lambda: socket.create_connection((DEFAULT_PING_HOST, 53), timeout=3)
+            )
+            return True
+        except Exception:
+            return False
 
     def add_to_queue(self, data: Dict[str, Any]):
         """Adiciona dados à fila de telemetria e garante a persistência física imediata."""
@@ -112,8 +127,7 @@ class EasySmartClient:
             # apenas para validar a conexão e atualizar o timestamp de "Última Sincronização".
             # Isso garante que o usuário veja que o intervalo está sendo respeitado.
             _LOGGER.debug("Fila vazia. Iniciando heartbeat para manter conexão viva.")
-            await self.authenticate()
-            return True
+            return await self.authenticate()
 
         # O Lock garante que se um ciclo de rede demorar, o próximo não atropele o atual
         async with self._lock:

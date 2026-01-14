@@ -17,6 +17,8 @@ from .const import (
     ATTR_QUEUE_SIZE,
     DIAG_CONEXAO_OK,
     DIAG_CONEXAO_ERR,
+    DIAG_SERVER_ERR,
+    DIAG_TIMEOUT_RETRY,
     DIAG_PENDENTE,
     TEST_MODE
 )
@@ -42,6 +44,7 @@ class EasySmartCoordinator(DataUpdateCoordinator):
         self.hass = hass
 
         # Estado interno de diagnóstico
+        self._last_status = DIAG_CONEXAO_OK
         self._last_sync_success: bool = True
 
         # Validação de intervalo mínimo para proteger o sistema (60s)
@@ -89,18 +92,29 @@ class EasySmartCoordinator(DataUpdateCoordinator):
         _LOGGER.info("Executando ciclo de sincronização agendado (Fila: %s itens, Intervalo: %ss)", 
                      len(self.client.queue), self.update_interval.total_seconds() if self.update_interval else "N/A")
 
+        # 1. Muda status para Timeout/Retry no início do ciclo (feedback imediato)
+        self._last_status = DIAG_TIMEOUT_RETRY
+        self.async_set_updated_data(self._get_diagnostics_payload())
+
         try:
             # Chama o método de sincronia do cliente (que lida com retries e auth)
             success = await self.client.sync_queue()
 
             # Atualiza os estados internos baseado no resultado
             if success:
+                self._last_status = DIAG_CONEXAO_OK
                 self._last_sync_success = True
                 if len(self.client.queue) == 0:
                     _LOGGER.debug("Sincronização OK. Fila limpa.")
             else:
                 self._last_sync_success = False
-                _LOGGER.warning("Ciclo de sincronização falhou. Os dados permanecerão no disco para a próxima tentativa.")
+                # 2. Se falhar, verifica se o problema é a Internet ou o Servidor
+                if await self.client.check_internet():
+                    self._last_status = DIAG_SERVER_ERR
+                    _LOGGER.warning("Internet OK, mas API fora do ar (Erro de Servidor).")
+                else:
+                    self._last_status = DIAG_CONEXAO_ERR
+                    _LOGGER.warning("Sem conexão com a Internet (Erro de Rede).")
 
             # Retorna o dicionário de dados que alimenta os sensores de diagnóstico
             return self._get_diagnostics_payload()
@@ -108,9 +122,15 @@ class EasySmartCoordinator(DataUpdateCoordinator):
         except ConfigEntryAuthFailed as e:
             # Erro específico de autenticação deve ser repassado para o HA pedir reconfiguração
             self._last_sync_success = False
+            self._last_status = DIAG_SERVER_ERR
             raise e
         except Exception as err:
             self._last_sync_success = False
+            # Verifica internet em caso de exceção desconhecida
+            if await self.client.check_internet():
+                self._last_status = DIAG_SERVER_ERR
+            else:
+                self._last_status = DIAG_CONEXAO_ERR
             _LOGGER.error("Erro crítico não tratado no Coordinator: %s", err)
             raise UpdateFailed(f"Erro de comunicação com API: {err}") from err
 
@@ -119,7 +139,7 @@ class EasySmartCoordinator(DataUpdateCoordinator):
         client_stats = self.client.get_diagnostics()
 
         return {
-            "status_conexao": DIAG_CONEXAO_OK if self._last_sync_success else DIAG_CONEXAO_ERR,
+            "status_conexao": self._last_status,
             ATTR_LAST_SYNC: client_stats.get("last_communication", "Aguardando..."),
             ATTR_QUEUE_SIZE: client_stats.get("queue_size", 0),
             "api_host": client_stats.get("api_host", "Desconhecido"),
@@ -154,7 +174,7 @@ class EasySmartCoordinator(DataUpdateCoordinator):
     @property
     def last_sync_success(self) -> bool:
         """Retorna True se a última conexão foi bem sucedida."""
-        return self._last_sync_success
+        return self._last_status == DIAG_CONEXAO_OK
 
     @property
     def last_sync_time(self) -> str:

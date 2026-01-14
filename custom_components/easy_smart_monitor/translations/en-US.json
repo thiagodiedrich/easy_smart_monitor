@@ -136,7 +136,16 @@
       "corrente": { "name": "Current" },
       "umidade": { "name": "Humidity" },
       "status": { "name": "Status" },
-      "conexao": { "name": "API Connection Status" },
+      "conexao": { 
+        "name": "API Connection Status",
+        "state": {
+          "Conectado": "Connected",
+          "Erro de Rede": "Network Error",
+          "Erro de Servidor": "Server Error",
+          "Timeout/Retry": "Timeout/Retry",
+          "Pendente": "Pending"
+        }
+      },
       "sincro": { "name": "Last Synchronization" },
       "fila": { "name": "Outgoing Queue" }
     },
