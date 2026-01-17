@@ -1,7 +1,7 @@
-# 🧊 Easy Smart Monitor v1.5.0
+# 🧊 Easy Smart Monitor v1.5.2
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![version](https://img.shields.io/badge/version-1.5.0-green.svg)](https://github.com/thiagodiedrich/easy_smart_monitor)
+[![version](https://img.shields.io/badge/version-1.5.2-green.svg)](https://github.com/thiagodiedrich/easy_smart_monitor)
 [![maintainer](https://img.shields.io/badge/maintainer-@thiagodiedrich-blue.svg)](https://github.com/thiagodiedrich)
 
 **Integração profissional para monitoramento industrial de freezers, geladeiras e câmaras frias no Home Assistant.**
@@ -47,7 +47,7 @@ Cada equipamento adicionado ao Easy Smart Monitor gera automaticamente um dispos
 * Acesso à pasta `custom_components`.
 
 ### Passo a Passo
-1.  Baixe o código fonte da versão mais recente (v1.5.0).
+1.  Baixe o código fonte da versão mais recente (v1.5.2).
 2.  Copie a pasta **`easy_smart_monitor`** para dentro do diretório `/config/custom_components/` do seu Home Assistant.
 3.  **Reinicie o Home Assistant**.
 4.  Vá em **Configurações > Dispositivos e Serviços > Adicionar Integração**.
@@ -71,6 +71,9 @@ Para adicionar novos freezers ou remover sensores, clique em **Configurar** no c
 ---
 
 ## 📝 Changelog
+
+### v1.5.2 (Estável)
+* [x] **Correção de Contagem de Fila:** Fila de envio agora conta corretamente por sensores (não por equipamentos). O sensor "Fila de Envio" nas configurações do dispositivo agora exibe o número correto de sensores pendentes.
 
 ### v1.5.0 (Estável)
 * [x] **Autenticação de Dispositivos:** Integração com API v1.1.0 usando endpoint específico `/api/v1/auth/device/login` para autenticação de dispositivos IoT.

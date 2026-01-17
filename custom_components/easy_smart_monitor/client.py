@@ -52,6 +52,20 @@ class EasySmartClient:
 
         _LOGGER.debug("Cliente %s inicializado. Caminho de armazenamento: %s", NAME, self.storage_path)
 
+    def _count_total_sensors(self) -> int:
+        """
+        Conta o total de sensores na fila.
+        A fila está agrupada por equipamento, então precisamos somar todos os sensores.
+        """
+        total = 0
+        for item in self.queue:
+            sensors = item.get("sensor", [])
+            if isinstance(sensors, list):
+                total += len(sensors)
+            elif sensors:  # Se for um único sensor (formato antigo)
+                total += 1
+        return total
+
     async def authenticate(self) -> bool:
         """
         Realiza a autenticação como dispositivo IoT e obtém o Bearer Token.
@@ -167,7 +181,8 @@ class EasySmartClient:
         # O Lock garante que se um ciclo de rede demorar, o próximo não atropele o atual
         async with self._lock:
             if TEST_MODE:
-                _LOGGER.info("MODO TESTE: Simulação de envio bulk de %s itens concluída.", len(self.queue))
+                total_sensors = self._count_total_sensors()
+                _LOGGER.info("MODO TESTE: Simulação de envio bulk de %s sensores concluída.", total_sensors)
                 self._last_communication_time = datetime.now()
                 self.queue.clear()
                 self._save_queue_to_disk()
@@ -218,7 +233,8 @@ class EasySmartClient:
                     ) as response:
                         if response.status in [200, 201]:
                             self._last_communication_time = datetime.now()
-                            _LOGGER.info("Sucesso! %s eventos de telemetria enviados para a API central.", len(self.queue))
+                            total_sensors = self._count_total_sensors()
+                            _LOGGER.info("Sucesso! %s sensores de telemetria enviados para a API central.", total_sensors)
                             self.queue.clear()
                             self._save_queue_to_disk()
                             return True
@@ -282,11 +298,13 @@ class EasySmartClient:
                 last_comm_str = data.get("api_ultima_comunicacao") or data.get("last_communication")
                 if last_comm_str:
                     self._last_communication_time = datetime.fromisoformat(last_comm_str)
-                _LOGGER.info("Persistência carregada: %s eventos e última comunicação restaurada.", len(self.queue))
+                total_sensors = self._count_total_sensors()
+                _LOGGER.info("Persistência carregada: %s sensores e última comunicação restaurada.", total_sensors)
             elif isinstance(data, list):
                 # Legado (v1.2.0-)
                 self.queue = data
-                _LOGGER.info("Persistência legada carregada: %s eventos restaurados.", len(self.queue))
+                total_sensors = self._count_total_sensors()
+                _LOGGER.info("Persistência legada carregada: %s sensores restaurados.", total_sensors)
             
         except Exception as e:
             _LOGGER.error("Falha ao carregar persistência local: %s", e)
@@ -297,7 +315,7 @@ class EasySmartClient:
     def get_diagnostics(self) -> Dict[str, Any]:
         """Extrai métricas de saúde interna para os sensores de diagnóstico."""
         return {
-            "queue_size": len(self.queue),
+            "queue_size": self._count_total_sensors(),  # Total de sensores, não equipamentos
             "is_authenticated": self.token is not None,
             "api_host": self.host,
             "test_mode": TEST_MODE,

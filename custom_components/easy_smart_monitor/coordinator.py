@@ -94,7 +94,9 @@ class EasySmartCoordinator(DataUpdateCoordinator):
             return self._get_diagnostics_payload()
         
         self._is_syncing = True
-        _LOGGER.info("Iniciando ciclo de sincronização (Fila: %s itens)", len(self.client.queue))
+        # Contar total de sensores na fila (usando método do client)
+        total_sensors = self.client._count_total_sensors()
+        _LOGGER.info("Iniciando ciclo de sincronização (Fila: %s sensores)", total_sensors)
 
         # 1. Muda status para Timeout/Retry no início do ciclo
         self._last_status = DIAG_TIMEOUT_RETRY
@@ -164,10 +166,13 @@ class EasySmartCoordinator(DataUpdateCoordinator):
         # 2. Notifica o HA que o tamanho da fila mudou (Update Push)
         self.async_set_updated_data(self._get_diagnostics_payload())
 
+        # Contar total de sensores na fila para o log (usando método do client)
+        total_sensors = self.client._count_total_sensors()
+        
         _LOGGER.debug(
             "Telemetria adicionada para equip %s. Sensores na fila: %s",
             equip_uuid,
-            len(self.client.queue)
+            total_sensors
         )
 
     # --- Propriedades Auxiliares para Acesso Rápido pelas Entidades ---
@@ -189,8 +194,12 @@ class EasySmartCoordinator(DataUpdateCoordinator):
 
     @property
     def queue_size(self) -> int:
-        """Retorna o tamanho atual da fila."""
-        return len(self.client.queue)
+        """
+        Retorna o número total de sensores na fila.
+        A fila está agrupada por equipamento, então precisamos contar todos os sensores.
+        Usa o método do client para manter consistência.
+        """
+        return self.client._count_total_sensors()
 
     @property
     def update_interval_seconds(self) -> float:
