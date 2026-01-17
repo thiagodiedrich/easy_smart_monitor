@@ -132,7 +132,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     name=device_name,
                     manufacturer=NAME,
                     model=f"Monitor Industrial v{VERSION}",
-                    suggested_area=equip.get("local"),
                     configuration_url=api_host
                 )
             except Exception as e:

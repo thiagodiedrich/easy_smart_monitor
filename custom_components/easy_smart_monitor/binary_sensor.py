@@ -88,7 +88,6 @@ class EasySmartDoorSensor(BinarySensorEntity):
             name=f"{equip['nome']} ({equip.get('local', 'Sem Local')})",
             manufacturer=NAME,
             model=f"Monitor Industrial v{VERSION}",
-            suggested_area=equip.get("local"),
         )
 
     @property
@@ -311,7 +310,6 @@ class EasySmartGenericBinarySensor(BinarySensorEntity):
             name=f"{equip['nome']} ({equip.get('local', 'Sem Local')})",
             manufacturer=NAME,
             model=f"Monitor Industrial v{VERSION}",
-            suggested_area=equip.get("local"),
         )
 
     @property
@@ -409,7 +407,6 @@ class EasySmartButtonSensor(BinarySensorEntity):
             name=f"{equip['nome']} ({equip.get('local', 'Sem Local')})",
             manufacturer=NAME,
             model=f"Monitor Industrial v{VERSION}",
-            suggested_area=equip.get("local"),
         )
 
     async def async_added_to_hass(self) -> None:

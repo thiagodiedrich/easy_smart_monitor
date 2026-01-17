@@ -107,7 +107,6 @@ class EasySmartTelemetrySensor(SensorEntity):
             name=f"{equip['nome']} ({equip.get('local', 'Sem Local')})",
             manufacturer=NAME,
             model=f"Monitor Industrial v{VERSION}",
-            suggested_area=equip.get("local"),
         )
 
     def _setup_sensor_characteristics(self):
@@ -257,7 +256,6 @@ class EasySmartDiagnosticSensor(CoordinatorEntity, SensorEntity):
             name=f"{equip['nome']} ({equip.get('local', 'Sem Local')})",
             manufacturer=NAME,
             model=f"Monitor Industrial v{VERSION}",
-            suggested_area=equip.get("local"),
         )
 
     @property

@@ -42,7 +42,6 @@ class EasySmartSwitch(SwitchEntity):
             name=f"{equip['nome']} ({equip.get('local', 'Sem Local')})",
             manufacturer=NAME,
             model=f"Monitor Industrial v{VERSION}",
-            suggested_area=equip.get("local"),
         )
 
     @property
