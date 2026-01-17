@@ -95,11 +95,72 @@ app.get('/', (req, res) => {
     console.log(`Servidor Mock rodando online, acessou /`);
 });
 
-// 2. Login
+// 2. Login Frontend/Dashboard
 app.post('/auth/login', (req, res) => {
     const { username, password } = req.body;
 
-    console.log(`-> Tentativa de Login: ${username} / ${password}`);
+    console.log(`-> Tentativa de Login Frontend: ${username} / ${password}`);
+
+    if (username === VALID_USER && password === VALID_PASS) {
+        const tokens = generateTokens(username);
+        
+        return res.json({
+            access_token: tokens.accessToken,
+            refresh_token: tokens.refreshToken,
+            token_type: "bearer",
+            expires_in: tokens.expiresIn
+        });
+    }
+
+    return res.status(401).json({ detail: "Credenciais inválidas" });
+});
+
+// 2b. Login Device/IoT (v1.1.0 - Endpoint específico para dispositivos)
+app.post('/api/v1/auth/device/login', (req, res) => {
+    const { username, password } = req.body;
+
+    console.log(`-> Tentativa de Login Device: ${username} / ${password}`);
+
+    if (username === VALID_USER && password === VALID_PASS) {
+        // Gera token com user_type: 'device' no payload
+        const accessToken = jwt.sign(
+            { 
+                sub: username, 
+                user_type: 'device',
+                type: 'access' 
+            }, 
+            SECRET_KEY, 
+            { expiresIn: ACCESS_TOKEN_EXPIRE }
+        );
+        const refreshToken = jwt.sign(
+            { 
+                sub: username, 
+                user_type: 'device',
+                type: 'refresh' 
+            }, 
+            SECRET_KEY, 
+            { expiresIn: REFRESH_TOKEN_EXPIRE }
+        );
+        
+        return res.json({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            token_type: "bearer",
+            expires_in: 120
+        });
+    }
+
+    return res.status(401).json({ 
+        error: "INVALID_CREDENTIALS",
+        message: "Credenciais inválidas" 
+    });
+});
+
+// Compatibilidade: endpoint antigo /auth/login também aceita device (para testes)
+app.post('/api/v1/auth/login', (req, res) => {
+    const { username, password } = req.body;
+
+    console.log(`-> Tentativa de Login (v1): ${username} / ${password}`);
 
     if (username === VALID_USER && password === VALID_PASS) {
         const tokens = generateTokens(username);
@@ -148,17 +209,23 @@ app.post('/auth/refresh', (req, res) => {
     });
 });
 
-// 4. Receber Telemetria
-app.post('/api/telemetria/bulk', (req, res) => {
+// 4. Receber Telemetria (v1.1.0 - Endpoint atualizado)
+app.post('/api/v1/telemetry/bulk', (req, res) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
-    if (!token) return res.status(401).json({ detail: "Não autorizado" });
+    if (!token) return res.status(401).json({ error: "UNAUTHORIZED", message: "Não autorizado" });
 
     jwt.verify(token, SECRET_KEY, (err, user) => {
         if (err) {
             console.log("-> ALERTA: Token de acesso expirado recebido na telemetria! O HA deve tentar refresh agora.");
-            return res.status(401).json({ detail: "Token expirado" });
+            return res.status(401).json({ error: "UNAUTHORIZED", message: "Token expirado" });
+        }
+
+        // Verificar se é token de device (v1.1.0)
+        if (user.user_type && user.user_type !== 'device') {
+            console.log("-> ALERTA: Token não é do tipo 'device'!");
+            return res.status(403).json({ error: "FORBIDDEN", message: "Apenas dispositivos podem enviar telemetria" });
         }
 
         const payload = req.body;
@@ -188,6 +255,35 @@ app.post('/api/telemetria/bulk', (req, res) => {
         console.log("---------------------------------------------------");
         } else {
             console.log("   Payload não é uma lista:", payload);
+        }
+
+        return res.json({ status: "success", received: payload.length });
+    });
+});
+
+// Compatibilidade: endpoint antigo /api/telemetria/bulk
+app.post('/api/telemetria/bulk', (req, res) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) return res.status(401).json({ detail: "Não autorizado" });
+
+    jwt.verify(token, SECRET_KEY, (err, user) => {
+        if (err) {
+            console.log("-> ALERTA: Token de acesso expirado recebido na telemetria! O HA deve tentar refresh agora.");
+            return res.status(401).json({ detail: "Token expirado" });
+        }
+
+        const payload = req.body;
+        
+        console.log(`\n[RECEBIDO - Compatibilidade] Pacote com ${payload.length} itens`);
+        
+        if (Array.isArray(payload)) {
+            payload.forEach(item => {
+                const val = item.valor !== undefined ? item.valor : item.status;
+                const equipShort = item.equip_uuid ? `...${item.equip_uuid.slice(-6)}` : 'N/A';
+                console.log(`   - ${item.timestamp} | ${item.tipo}: ${val} (Equip: ${equipShort})`);
+            });
         }
 
         return res.json({ status: "success", received: payload.length });

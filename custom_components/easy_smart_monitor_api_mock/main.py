@@ -53,12 +53,50 @@ def home():
 
 @app.post("/auth/login")
 def login(data: LoginRequest):
-    print(f"-> Tentativa de Login: {data.username} / {data.password}")
+    """Login para Frontend/Dashboard"""
+    print(f"-> Tentativa de Login Frontend: {data.username} / {data.password}")
     
     if data.username == VALID_USER and data.password == VALID_PASS:
         # Gera tokens
-        access_token = create_token({"sub": data.username}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-        refresh_token = create_token({"sub": data.username, "type": "refresh"}, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+        access_token = create_token({"sub": data.username, "user_type": "frontend"}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+        refresh_token = create_token({"sub": data.username, "type": "refresh", "user_type": "frontend"}, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+        
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        }
+    
+    raise HTTPException(status_code=401, detail="Credenciais inválidas")
+
+@app.post("/api/v1/auth/device/login")
+def device_login(data: LoginRequest):
+    """Login para Dispositivos IoT (v1.1.0)"""
+    print(f"-> Tentativa de Login Device: {data.username} / {data.password}")
+    
+    if data.username == VALID_USER and data.password == VALID_PASS:
+        # Gera tokens com user_type: 'device'
+        access_token = create_token({"sub": data.username, "user_type": "device"}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+        refresh_token = create_token({"sub": data.username, "type": "refresh", "user_type": "device"}, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+        
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        }
+    
+    raise HTTPException(status_code=401, detail="Credenciais inválidas")
+
+@app.post("/api/v1/auth/login")
+def login_v1(data: LoginRequest):
+    """Login Frontend (v1.1.0 - Compatibilidade)"""
+    print(f"-> Tentativa de Login (v1): {data.username} / {data.password}")
+    
+    if data.username == VALID_USER and data.password == VALID_PASS:
+        access_token = create_token({"sub": data.username, "user_type": "frontend"}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+        refresh_token = create_token({"sub": data.username, "type": "refresh", "user_type": "frontend"}, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
         
         return {
             "access_token": access_token,
@@ -94,10 +132,40 @@ def refresh_token_endpoint(authorization: str = Header(None)):
         "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60
     }
 
+@app.post("/api/v1/telemetry/bulk")
+def receive_telemetry_v1(payload: List[TelemetryItem], authorization: str = Header(None)):
+    """
+    Recebe o lote de dados da fila (v1.1.0). Valida o token de acesso de dispositivo.
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Não autorizado")
+    
+    # Valida Access Token
+    token = authorization.replace("Bearer ", "")
+    try:
+        payload_data = verify_token(token)
+        # Verificar se é token de device (v1.1.0)
+        if payload_data.get("user_type") and payload_data.get("user_type") != "device":
+            print("-> ERRO: Token não é do tipo 'device'!")
+            raise HTTPException(status_code=403, detail="Apenas dispositivos podem enviar telemetria")
+    except HTTPException:
+        raise
+    except Exception:
+        print("-> ERRO: Token de acesso expirado ou inválido recebido na telemetria!")
+        raise HTTPException(status_code=401, detail="Token expirado")
+
+    # Se chegou aqui, o token é válido
+    print(f"\n[RECEBIDO - v1.1.0] Pacote com {len(payload)} itens:")
+    for item in payload:
+        val = item.valor if item.valor is not None else item.status
+        print(f"   - {item.timestamp} | {item.tipo}: {val} (Equip: ...{item.equip_uuid[-6:]})")
+
+    return {"status": "success", "received": len(payload)}
+
 @app.post("/api/telemetry")
 def receive_telemetry(payload: List[TelemetryItem], authorization: str = Header(None)):
     """
-    Recebe o lote de dados da fila. Valida o token de acesso.
+    Recebe o lote de dados da fila (compatibilidade). Valida o token de acesso.
     """
     if not authorization:
         raise HTTPException(status_code=401, detail="Não autorizado")
@@ -111,7 +179,7 @@ def receive_telemetry(payload: List[TelemetryItem], authorization: str = Header(
         raise # Retorna 401 para forçar a integração a usar o refresh
 
     # Se chegou aqui, o token é válido
-    print(f"\n[RECEBIDO] Pacote com {len(payload)} itens:")
+    print(f"\n[RECEBIDO - Compatibilidade] Pacote com {len(payload)} itens:")
     for item in payload:
         val = item.valor if item.valor is not None else item.status
         print(f"   - {item.timestamp} | {item.tipo}: {val} (Equip: ...{item.equip_uuid[-6:]})")

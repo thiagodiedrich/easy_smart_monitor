@@ -53,34 +53,53 @@ class EasySmartClient:
         _LOGGER.debug("Cliente %s inicializado. Caminho de armazenamento: %s", NAME, self.storage_path)
 
     async def authenticate(self) -> bool:
-        """Realiza a autenticação e obtém o Bearer Token para as requisições."""
+        """
+        Realiza a autenticação como dispositivo IoT e obtém o Bearer Token.
+        Usa o endpoint específico para dispositivos: /api/v1/auth/device/login
+        """
         if TEST_MODE:
             _LOGGER.info("MODO TESTE: Simulando sucesso na autenticação.")
-            self.token = "token_teste_v10_estavel"
+            self.token = "token_teste_v11_estavel"
             self._last_communication_time = datetime.now()
             self.hass.add_job(self._save_queue_to_disk)
             return True
 
-        url = f"{self.host}/auth/login"
+        # Endpoint específico para autenticação de dispositivos IoT
+        url = f"{self.host}/api/v1/auth/device/login"
         payload = {
             "username": self.username,
             "password": self.password
         }
 
-        _LOGGER.debug("Enviando requisição de login para: %s", url)
+        _LOGGER.debug("Enviando requisição de login de dispositivo para: %s", url)
         try:
             async with self.session.post(url, json=payload, timeout=15) as response:
                 if response.status == 200:
                     self._last_communication_time = datetime.now()
                     data = await response.json()
                     self.token = data.get("access_token")
-                    _LOGGER.info("Autenticação na API %s realizada com sucesso.", NAME)
+                    _LOGGER.info("Autenticação de dispositivo na API %s realizada com sucesso.", NAME)
                     # Persiste a metadata de sucesso
                     self.hass.add_job(self._save_queue_to_disk)
                     return True
+                
+                # Tratar erros específicos de status do usuário
+                if response.status == 403:
+                    try:
+                        error_data = await response.json()
+                        error_msg = error_data.get("message", "Acesso negado")
+                        _LOGGER.error(
+                            "Acesso negado na autenticação. Status: %s. Mensagem: %s",
+                            response.status, error_msg
+                        )
+                    except:
+                        _LOGGER.error(
+                            "Acesso negado na autenticação. Status: %s. Verifique se o usuário está ativo e não bloqueado.",
+                            response.status
+                        )
 
                 _LOGGER.error(
-                    "Falha na autenticação. Status: %s. Verifique se as credenciais estão corretas.",
+                    "Falha na autenticação. Status: %s. Verifique se as credenciais estão corretas e o usuário é do tipo 'device'.",
                     response.status
                 )
         except (asyncio.TimeoutError, aiohttp.ClientError) as e:
@@ -162,7 +181,8 @@ class EasySmartClient:
             attempts = 0
             while attempts < MAX_RETRIES:
                 try:
-                    url = f"{self.host}/api/telemetria/bulk"
+                    # Usar endpoint v1 da API (compatível com /api/telemetria/bulk)
+                    url = f"{self.host}/api/v1/telemetry/bulk"
                     auth_headers = {
                         **HEADERS,
                         "Authorization": f"Bearer {self.token}"
