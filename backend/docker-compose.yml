@@ -72,9 +72,6 @@ services:
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
       - DEBUG=false
-    volumes:
-      - ./workers-python/app:/app/app
-      - ./app/models:/app/app/models:ro  # Compartilhar modelos
     depends_on:
       postgres:
         condition: service_healthy

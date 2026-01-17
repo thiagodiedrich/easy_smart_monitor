@@ -1,6 +1,38 @@
 # Changelog - Easy Smart Monitor Backend
 
-## [1.0.0] - 2024-01-15 - Versão Estável
+## [1.1.0] - 2024-01-15 - Versão Estável
+
+### 🎯 Versão Estável de Produção
+
+Esta é a versão estável 1.1.0 do backend Easy Smart Monitor, consolidando todas as funcionalidades implementadas e otimizações de segurança.
+
+### ✨ Melhorias e Correções
+
+- ✅ **Segurança Aprimorada**: Defense in Depth implementado
+  - Autenticação separada para dispositivos e frontend
+  - Gerenciamento de status de usuários (Ativo, Inativo, Bloqueado, Temporariamente Bloqueado)
+  - Penalty Box com backoff exponencial
+  - Prevenção de uploads concorrentes
+  - Blacklist em Redis
+  - Logging estruturado para Fail2Ban
+
+- ✅ **Limpeza de Código**: Remoção de imports não utilizados
+- ✅ **Correção Docker Compose**: Volumes duplicados e incorretos corrigidos
+- ✅ **Documentação Atualizada**: Todos os arquivos .md atualizados para v1.1.0
+- ✅ **Swagger/OpenAPI**: Documentação interativa adicionada em `/api/v1/docs`
+
+### 📊 Funcionalidades Mantidas
+
+Todas as funcionalidades da versão 1.0.0 foram mantidas e aprimoradas:
+- ✅ Arquitetura Distribuída (Node.js Gateway + Kafka + Python Workers)
+- ✅ Claim Check Pattern
+- ✅ TimescaleDB Continuous Aggregates
+- ✅ Endpoints Analytics Otimizados
+- ✅ Health Checks
+
+---
+
+## [1.0.0] - 2024-01-15 - Versão Estável Inicial
 
 ### 🎯 Versão Estável de Produção
 
@@ -112,4 +144,4 @@ Esta é a primeira versão estável do backend Easy Smart Monitor, implementando
 
 ---
 
-**Versão 1.0.0 Estável - Pronta para Produção!** 🚀
+**Versão 1.1.0 Estável - Pronta para Produção!** 🚀

@@ -7,10 +7,6 @@ Uso:
 """
 import asyncio
 import sys
-from app.migrations import (
-    upgrade as upgrade_002,
-    downgrade as downgrade_002
-)
 from app.migrations.002_timescaledb_hypertable import upgrade as upgrade_002_impl, downgrade as downgrade_002_impl
 from app.migrations.003_continuous_aggregates import upgrade as upgrade_003_impl, downgrade as downgrade_003_impl
 from app.migrations.004_continuous_aggregates_policies import upgrade as upgrade_004_impl, downgrade as downgrade_004_impl
@@ -18,10 +14,13 @@ from app.migrations.004_continuous_aggregates_policies import upgrade as upgrade
 
 async def run_migrations(command):
     """Executa todas as migrations."""
+    from app.migrations.005_user_security_fields import upgrade as upgrade_005_impl, downgrade as downgrade_005_impl
+    
     migrations = [
         ("002_timescaledb_hypertable", upgrade_002_impl, downgrade_002_impl),
         ("003_continuous_aggregates", upgrade_003_impl, downgrade_003_impl),
         ("004_continuous_aggregates_policies", upgrade_004_impl, downgrade_004_impl),
+        ("005_user_security_fields", upgrade_005_impl, downgrade_005_impl),
     ]
     
     if command == "upgrade":

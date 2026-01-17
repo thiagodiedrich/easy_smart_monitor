@@ -9,6 +9,8 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { kafkaProducer } from './kafka/producer.js';
 import { initStorage } from './storage/storage.js';
 import { initDatabasePool, closeDatabasePool } from './utils/database.js';
@@ -38,6 +40,52 @@ await app.register(cors, {
   credentials: true,
 });
 
+// Swagger/OpenAPI Documentation
+await app.register(swagger, {
+  openapi: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Easy Smart Monitor API',
+      description: 'API RESTful escalável para recebimento e processamento de dados de telemetria',
+      version: '1.1.0',
+      contact: {
+        name: 'Datacase',
+      },
+    },
+    servers: [
+      {
+        url: `http://${config.host}:${config.port}`,
+        description: 'Servidor Local',
+      },
+    ],
+    tags: [
+      { name: 'Autenticação', description: 'Endpoints de autenticação e autorização' },
+      { name: 'Telemetria', description: 'Envio de dados de telemetria (Claim Check Pattern)' },
+      { name: 'Analytics', description: 'Consultas analíticas otimizadas (Continuous Aggregates)' },
+      { name: 'Health', description: 'Health checks e status do sistema' },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+  },
+});
+
+await app.register(swaggerUi, {
+  routePrefix: '/api/v1/docs',
+  uiConfig: {
+    docExpansion: 'list',
+    deepLinking: true,
+  },
+  staticCSP: true,
+  transformStaticCSP: (header) => header,
+});
+
 // Rate limiting
 const rateLimitConfig = {
   max: config.rateLimitPerMinute,
@@ -45,18 +93,42 @@ const rateLimitConfig = {
   nameSpace: 'easysmart-gateway',
 };
 
-// Adicionar Redis se disponível
+// Redis para rate limiting e shield
 if (config.redisUrl) {
   try {
-    const Redis = (await import('ioredis')).default;
-    rateLimitConfig.redis = new Redis(config.redisUrl);
-    logger.info('Rate limiting com Redis configurado');
+    // Parse Redis URL
+    const redisUrl = config.redisUrl.replace('redis://', '');
+    const [hostPort, db] = redisUrl.split('/');
+    const [host, port] = hostPort.split(':');
+    
+    // Registrar @fastify/redis
+    await app.register(import('@fastify/redis'), {
+      host: host || 'redis',
+      port: parseInt(port || '6379', 10),
+      db: parseInt(db || '0', 10),
+    });
+    
+    rateLimitConfig.redis = app.redis;
+    logger.info('Redis configurado para rate limiting e shield', {
+      host: host || 'redis',
+      port: port || '6379',
+    });
   } catch (error) {
     logger.warn('Redis não disponível, usando rate limiting em memória', { error: error.message });
   }
 }
 
 await app.register(rateLimit, rateLimitConfig);
+
+// Registrar Shield Plugin (Defense in Depth) - DEPOIS do Redis
+if (app.redis) {
+  try {
+    await app.register(import('./plugins/shield.js'));
+    logger.info('Shield plugin registrado');
+  } catch (error) {
+    logger.warn('Erro ao registrar Shield plugin', { error: error.message });
+  }
+}
 
 // JWT
 await app.register(jwt, {
@@ -84,7 +156,7 @@ await app.register(healthRoutes, { prefix: '/api/v1/health' });
 app.get('/', async (request, reply) => {
   return {
     name: 'Easy Smart Monitor Gateway',
-    version: '1.0.0',
+    version: '1.1.0',
     status: 'online',
     docs: '/api/v1/docs',
   };

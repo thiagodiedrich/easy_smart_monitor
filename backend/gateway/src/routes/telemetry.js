@@ -10,12 +10,37 @@ import { logger } from '../utils/logger.js';
 import config from '../config.js';
 
 export const telemetryRoutes = async (fastify) => {
-  // Middleware de autenticação
+  // Middleware de autenticação (apenas devices podem enviar telemetria)
   fastify.addHook('onRequest', async (request, reply) => {
     try {
       await request.jwtVerify();
+      
+      // Verificar se é dispositivo
+      if (request.user.user_type !== 'device') {
+        logger.warn('Tentativa de enviar telemetria com token não-device', {
+          user_type: request.user.user_type,
+          username: request.user.sub,
+        });
+        return reply.code(403).send({ 
+          error: 'FORBIDDEN',
+          message: 'Apenas dispositivos podem enviar telemetria' 
+        });
+      }
     } catch (err) {
-      reply.code(401).send({ error: 'Não autorizado' });
+      return reply.code(401).send({ 
+        error: 'UNAUTHORIZED',
+        message: 'Não autorizado' 
+      });
+    }
+  });
+  
+  // Aplicar Shield (rate limiting + concurrency lock)
+  fastify.addHook('preHandler', async (request, reply) => {
+    if (fastify.shieldRequest) {
+      await fastify.shieldRequest(request, reply);
+    }
+    if (fastify.preventConcurrency) {
+      await fastify.preventConcurrency(request, reply);
     }
   });
   

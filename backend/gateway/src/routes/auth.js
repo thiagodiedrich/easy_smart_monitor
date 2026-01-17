@@ -1,25 +1,36 @@
 /**
  * Rotas de Autenticação
  * 
- * Gerencia login e refresh tokens.
+ * Gerencia login e refresh tokens para dois tipos de usuários:
+ * - Frontend: Dashboard e outras integrações web
+ * - Device: Dispositivos IoT (Home Assistant, etc.)
  * 
- * NOTA: Em produção, deve validar credenciais com banco de dados Python
- * ou serviço de autenticação separado. Esta é uma implementação básica.
+ * Cada tipo de usuário só pode fazer login na sua API específica.
  */
 import { logger } from '../utils/logger.js';
+import { validateUserCredentials, UserType } from '../utils/auth.js';
 import config from '../config.js';
+
+/**
+ * Obtém IP real do cliente
+ */
+function getRealIP(request) {
+  return request.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+         request.headers['x-real-ip'] ||
+         request.ip ||
+         request.socket.remoteAddress;
+}
 
 export const authRoutes = async (fastify) => {
   /**
    * POST /api/v1/auth/login
    * 
-   * Autentica usuário e retorna JWT tokens.
-   * 
-   * TODO: Integrar com banco de dados Python ou serviço de auth separado.
+   * Autenticação para Frontend/Dashboard.
+   * Apenas usuários do tipo 'frontend' podem usar este endpoint.
    */
   fastify.post('/login', {
     schema: {
-      description: 'Autentica usuário',
+      description: 'Autentica usuário frontend/dashboard',
       tags: ['Autenticação'],
       body: {
         type: 'object',
@@ -32,47 +43,164 @@ export const authRoutes = async (fastify) => {
     },
   }, async (request, reply) => {
     const { username, password } = request.body;
+    const ipAddress = getRealIP(request);
     
-    // TODO: Validar credenciais com banco de dados Python
-    // Por enquanto, validação básica
-    // Em produção, fazer requisição HTTP para serviço Python ou consultar DB compartilhado
     if (!username || !password) {
       return reply.code(401).send({ 
-        detail: 'Credenciais inválidas' 
+        error: 'INVALID_CREDENTIALS',
+        message: 'Credenciais inválidas' 
       });
     }
     
-    // Validação básica (remover em produção)
-    // Em produção, validar com banco de dados Python
-    const validUsers = process.env.VALID_USERS 
-      ? JSON.parse(process.env.VALID_USERS)
-      : { admin: 'admin123' }; // Default para desenvolvimento
+    // Validar credenciais (apenas tipo frontend)
+    const user = await validateUserCredentials(
+      username,
+      password,
+      UserType.FRONTEND,
+      ipAddress
+    );
     
-    if (!validUsers[username] || validUsers[username] !== password) {
-      logger.warn('Tentativa de login falhou', { username });
+    if (!user) {
       return reply.code(401).send({ 
-        detail: 'Credenciais inválidas' 
+        error: 'INVALID_CREDENTIALS',
+        message: 'Credenciais inválidas' 
+      });
+    }
+    
+    // Verificar se retornou erro de status
+    if (user.error) {
+      const statusCode = user.error === 'BLOCKED' || user.error === 'LOCKED' ? 403 : 401;
+      return reply.code(statusCode).send({
+        error: user.error,
+        message: user.message,
       });
     }
     
     // Gerar tokens
     const accessToken = fastify.jwt.sign(
-      { sub: username, type: 'access' },
+      { 
+        sub: user.username,
+        user_id: user.id,
+        user_type: UserType.FRONTEND,
+        type: 'access' 
+      },
       { expiresIn: config.jwtExpiresIn }
     );
     
     const refreshToken = fastify.jwt.sign(
-      { sub: username, type: 'refresh' },
+      { 
+        sub: user.username,
+        user_id: user.id,
+        user_type: UserType.FRONTEND,
+        type: 'refresh' 
+      },
       { expiresIn: '7d' }
     );
     
-    logger.info('Login realizado com sucesso', { username });
+    logger.info('Login frontend realizado com sucesso', { 
+      username,
+      user_id: user.id,
+      ip: ipAddress,
+    });
     
     return {
       access_token: accessToken,
       refresh_token: refreshToken,
       token_type: 'bearer',
-      expires_in: parseInt(config.jwtExpiresIn) * 60 || 900, // Converter minutos para segundos
+      expires_in: parseInt(config.jwtExpiresIn) * 60 || 900,
+    };
+  });
+  
+  /**
+   * POST /api/v1/auth/device/login
+   * 
+   * Autenticação para Dispositivos IoT.
+   * Apenas usuários do tipo 'device' podem usar este endpoint.
+   */
+  fastify.post('/device/login', {
+    schema: {
+      description: 'Autentica dispositivo IoT',
+      tags: ['Autenticação'],
+      body: {
+        type: 'object',
+        required: ['username', 'password'],
+        properties: {
+          username: { type: 'string' },
+          password: { type: 'string' },
+          device_id: { type: 'string' }, // Opcional: ID do dispositivo
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { username, password, device_id } = request.body;
+    const ipAddress = getRealIP(request);
+    
+    if (!username || !password) {
+      return reply.code(401).send({ 
+        error: 'INVALID_CREDENTIALS',
+        message: 'Credenciais inválidas' 
+      });
+    }
+    
+    // Validar credenciais (apenas tipo device)
+    const user = await validateUserCredentials(
+      username,
+      password,
+      UserType.DEVICE,
+      ipAddress
+    );
+    
+    if (!user) {
+      return reply.code(401).send({ 
+        error: 'INVALID_CREDENTIALS',
+        message: 'Credenciais inválidas' 
+      });
+    }
+    
+    // Verificar se retornou erro de status
+    if (user.error) {
+      const statusCode = user.error === 'BLOCKED' || user.error === 'LOCKED' ? 403 : 401;
+      return reply.code(statusCode).send({
+        error: user.error,
+        message: user.message,
+      });
+    }
+    
+    // Gerar tokens
+    const accessToken = fastify.jwt.sign(
+      { 
+        sub: user.username,
+        user_id: user.id,
+        user_type: UserType.DEVICE,
+        device_id: device_id || 'unknown',
+        type: 'access' 
+      },
+      { expiresIn: config.jwtExpiresIn }
+    );
+    
+    const refreshToken = fastify.jwt.sign(
+      { 
+        sub: user.username,
+        user_id: user.id,
+        user_type: UserType.DEVICE,
+        device_id: device_id || 'unknown',
+        type: 'refresh' 
+      },
+      { expiresIn: '30d' } // Refresh token mais longo para dispositivos
+    );
+    
+    logger.info('Login device realizado com sucesso', { 
+      username,
+      user_id: user.id,
+      device_id: device_id || 'unknown',
+      ip: ipAddress,
+    });
+    
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      token_type: 'bearer',
+      expires_in: parseInt(config.jwtExpiresIn) * 60 || 900,
     };
   });
   
@@ -80,6 +208,7 @@ export const authRoutes = async (fastify) => {
    * POST /api/v1/auth/refresh
    * 
    * Renova access token usando refresh token.
+   * Funciona para ambos os tipos de usuário.
    */
   fastify.post('/refresh', {
     schema: {
@@ -92,7 +221,8 @@ export const authRoutes = async (fastify) => {
       
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return reply.code(401).send({ 
-          detail: 'Header Authorization ausente' 
+          error: 'MISSING_TOKEN',
+          message: 'Header Authorization ausente' 
         });
       }
       
@@ -100,7 +230,8 @@ export const authRoutes = async (fastify) => {
       
       if (!token) {
         return reply.code(401).send({ 
-          detail: 'Token não fornecido' 
+          error: 'INVALID_TOKEN',
+          message: 'Token não fornecido' 
         });
       }
       
@@ -108,17 +239,27 @@ export const authRoutes = async (fastify) => {
       
       if (decoded.type !== 'refresh') {
         return reply.code(401).send({ 
-          detail: 'Token não é do tipo refresh' 
+          error: 'INVALID_TOKEN_TYPE',
+          message: 'Token não é do tipo refresh' 
         });
       }
       
-      // Gerar novo access token
+      // Gerar novo access token (preservar user_type)
       const accessToken = fastify.jwt.sign(
-        { sub: decoded.sub, type: 'access' },
+        { 
+          sub: decoded.sub,
+          user_id: decoded.user_id,
+          user_type: decoded.user_type,
+          device_id: decoded.device_id,
+          type: 'access' 
+        },
         { expiresIn: config.jwtExpiresIn }
       );
       
-      logger.info('Token renovado', { username: decoded.sub });
+      logger.info('Token renovado', { 
+        username: decoded.sub,
+        user_type: decoded.user_type,
+      });
       
       return {
         access_token: accessToken,
@@ -128,7 +269,8 @@ export const authRoutes = async (fastify) => {
     } catch (error) {
       logger.warn('Erro ao renovar token', { error: error.message });
       return reply.code(401).send({ 
-        detail: 'Token inválido ou expirado' 
+        error: 'INVALID_TOKEN',
+        message: 'Token inválido ou expirado' 
       });
     }
   });
@@ -149,11 +291,14 @@ export const authRoutes = async (fastify) => {
       
       return {
         username: request.user.sub,
-        type: request.user.type,
+        user_id: request.user.user_id,
+        user_type: request.user.user_type,
+        device_id: request.user.device_id,
       };
     } catch (error) {
       return reply.code(401).send({ 
-        detail: 'Não autorizado' 
+        error: 'UNAUTHORIZED',
+        message: 'Não autorizado' 
       });
     }
   });

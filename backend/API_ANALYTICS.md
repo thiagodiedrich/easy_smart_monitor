@@ -1,10 +1,10 @@
-# API Analytics - Endpoints Otimizados v1.0.0
+# API Analytics - Endpoints Otimizados v1.1.0
 
 ## 🎯 Objetivo
 
 Endpoints centralizados para consultas analíticas otimizadas usando Continuous Aggregates do TimescaleDB.
 
-**Versão**: 1.0.0 Estável
+**Versão**: 1.1.0 Estável
 
 **Todas as regras de negócio centralizadas na API!** ✅
 
@@ -168,23 +168,51 @@ curl -X GET \
 - **Estatísticas**: 20-100ms
 - **Home Assistant**: 10-50ms
 
-## 🔒 Segurança
+## 🔒 Segurança e Autenticação
 
-- ✅ Autenticação JWT obrigatória
-- ✅ Validação de parâmetros
-- ✅ Sanitização de inputs
-- ✅ Rate limiting aplicado
+### Autenticação Obrigatória
+
+Todos os endpoints de Analytics requerem autenticação JWT do tipo `frontend`:
+
+```bash
+# 1. Fazer login como usuário frontend
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"senha"}'
+
+# 2. Usar o token retornado nas requisições
+curl -X GET \
+  "http://localhost:8000/api/v1/analytics/equipment/{uuid}/history" \
+  -H "Authorization: Bearer <token>"
+```
+
+### Medidas de Segurança
+
+- ✅ Autenticação JWT obrigatória (tipo `frontend`)
+- ✅ Validação rigorosa de parâmetros
+- ✅ Sanitização de inputs (prepared statements)
+- ✅ Rate limiting aplicado (Redis)
 - ✅ Logs estruturados para auditoria
+- ✅ Defense in Depth (Blacklist, Penalty Box)
 
 ## 📝 Regras de Negócio Centralizadas
 
-Todas as regras de negócio estão na API:
+**Todas as regras de negócio estão centralizadas na API!** ✅
 
-1. **Validação de Períodos**: Apenas períodos válidos aceitos
-2. **Cálculo de Datas**: Datas padrão calculadas automaticamente
-3. **Seleção de Views**: View otimizada escolhida automaticamente baseada no período
+Isso garante:
+- ✅ Consistência entre diferentes clientes (Dashboard, Home Assistant, Mobile)
+- ✅ Facilidade de manutenção (mudanças em um único lugar)
+- ✅ Segurança (validações sempre aplicadas)
+- ✅ Performance (otimizações centralizadas)
+
+### Regras Implementadas
+
+1. **Validação de Períodos**: Apenas períodos válidos aceitos (`hour`, `day`, `raw`, `24h`, `7d`, `30d`, `1y`)
+2. **Cálculo de Datas**: Datas padrão calculadas automaticamente quando não fornecidas
+3. **Seleção de Views**: View otimizada escolhida automaticamente baseada no período solicitado
 4. **Formatação de Respostas**: Formato consistente para todos os endpoints
-5. **Filtros**: Filtros aplicados de forma segura (prepared statements)
+5. **Filtros Seguros**: Filtros aplicados usando prepared statements (proteção contra SQL injection)
+6. **Limites de Período**: Períodos máximos configurados para evitar queries muito pesadas
 
 **Nenhuma regra de negócio no frontend ou Home Assistant!** ✅
 
@@ -234,6 +262,20 @@ for row in data:
     # Atualizar sensor no Home Assistant
 ```
 
+## 📚 Documentação Adicional
+
+- **Swagger/OpenAPI**: `http://localhost:8000/api/v1/docs` - Documentação interativa
+- **README.md**: Visão geral e início rápido
+- **ARCHITECTURE.md**: Detalhes da arquitetura
+- **SECURITY.md**: Detalhes de segurança e autenticação
+
+## 🆘 Suporte
+
+Para problemas ou dúvidas:
+- Consultar Swagger: `http://localhost:8000/api/v1/docs`
+- Verificar logs: `docker-compose logs gateway`
+- Health check: `GET /api/v1/health/detailed`
+
 ---
 
-**API Analytics pronta para uso!** 🚀
+**API Analytics v1.1.0 pronta para uso!** 🚀

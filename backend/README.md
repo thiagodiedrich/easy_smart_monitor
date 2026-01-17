@@ -1,8 +1,8 @@
-# Easy Smart Monitor - Backend API v1.0.0
+# Easy Smart Monitor - Backend API v1.1.0
 
 API RESTful escalável para recebimento e processamento de dados de telemetria do Easy Smart Monitor.
 
-## 🎯 Versão 1.0.0 Estável
+## 🎯 Versão 1.1.0 Estável
 
 Esta é a versão estável do backend, implementando:
 - ✅ **Claim Check Pattern** para payloads grandes
@@ -93,16 +93,34 @@ python run_migrations.py upgrade
 
 ### Testar a API
 
+#### 1. Acessar Documentação Swagger
+
+Abra no navegador: `http://localhost:8000/api/v1/docs`
+
+A documentação Swagger permite testar todos os endpoints diretamente no navegador.
+
+#### 2. Obter Token de Autenticação
+
+**Para Frontend/Dashboard:**
 ```bash
-# 1. Obter token de autenticação
 curl -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}'
+```
 
-# 2. Enviar telemetria (com token)
+**Para Dispositivo IoT:**
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/device/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"device_user","password":"device_pass"}'
+```
+
+#### 3. Enviar Telemetria (requer token device)
+
+```bash
 curl -X POST http://localhost:8000/api/v1/telemetry/bulk \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
+  -H "Authorization: Bearer <device_token>" \
   -d '[{
     "equip_uuid": "550e8400-e29b-41d4-a716-446655440000",
     "equip_nome": "Freezer Teste",
@@ -113,11 +131,14 @@ curl -X POST http://localhost:8000/api/v1/telemetry/bulk \
       "timestamp": "2024-01-15T10:00:00Z"
     }]
   }]'
+```
 
-# 3. Consultar histórico (otimizado)
+#### 4. Consultar Histórico (requer token frontend)
+
+```bash
 curl -X GET \
   "http://localhost:8000/api/v1/analytics/equipment/550e8400-e29b-41d4-a716-446655440000/history?period=hour" \
-  -H "Authorization: Bearer <token>"
+  -H "Authorization: Bearer <frontend_token>"
 ```
 
 ## 📁 Estrutura do Projeto
@@ -159,21 +180,62 @@ backend/
 └── CHANGELOG.md            # Histórico de versões
 ```
 
+## 📚 Documentação da API
+
+### Swagger/OpenAPI
+
+A documentação interativa da API está disponível em:
+
+**URL**: `http://localhost:8000/api/v1/docs`
+
+A documentação Swagger permite:
+- ✅ Visualizar todos os endpoints disponíveis
+- ✅ Testar requisições diretamente no navegador
+- ✅ Ver schemas de requisição e resposta
+- ✅ Autenticar e testar endpoints protegidos
+
+### Documentação Completa
+
+Para documentação detalhada dos endpoints, consulte:
+- **API_ANALYTICS.md**: Endpoints de analytics otimizados
+- **SECURITY.md**: Detalhes de segurança e autenticação
+
 ## 🔐 Autenticação
 
-A API utiliza OAuth2 com JWT tokens:
+A API utiliza JWT tokens com dois tipos de usuários:
 
-1. **Login**: `POST /api/v1/auth/login`
-2. **Refresh Token**: `POST /api/v1/auth/refresh`
-3. **Telemetria**: `POST /api/v1/telemetry/bulk` (requer Bearer token)
-4. **Analytics**: `GET /api/v1/analytics/*` (requer Bearer token)
+### Tipos de Usuário
+
+1. **Frontend/Dashboard** (`user_type: 'frontend'`)
+   - Acesso: Analytics, dashboards, relatórios
+   - Login: `POST /api/v1/auth/login`
+
+2. **Device/IoT** (`user_type: 'device'`)
+   - Acesso: Envio de telemetria
+   - Login: `POST /api/v1/auth/device/login`
+
+### Endpoints de Autenticação
+
+1. **Login Frontend**: `POST /api/v1/auth/login`
+2. **Login Device**: `POST /api/v1/auth/device/login`
+3. **Refresh Token**: `POST /api/v1/auth/refresh`
+4. **Telemetria**: `POST /api/v1/telemetry/bulk` (requer token device)
+5. **Analytics**: `GET /api/v1/analytics/*` (requer token frontend)
 
 ## 📈 Endpoints Principais
+
+### Autenticação
+
+- `POST /api/v1/auth/login` - Login para frontend/dashboard
+- `POST /api/v1/auth/device/login` - Login para dispositivos IoT
+- `POST /api/v1/auth/refresh` - Renovar token de acesso
 
 ### Telemetria
 
 - `POST /api/v1/telemetry/bulk` - Recebe lotes de telemetria (salva em storage, envia Claim Check)
 - `POST /api/v1/telemetria/bulk` - Compatibilidade (mesmo endpoint)
+
+**Requer**: Token JWT do tipo `device`
 
 ### Analytics (Otimizados com Continuous Aggregates)
 
@@ -182,10 +244,14 @@ A API utiliza OAuth2 com JWT tokens:
 - `GET /api/v1/analytics/equipment/:uuid/stats` - Estatísticas agregadas
 - `GET /api/v1/analytics/home-assistant/:uuid` - Dados para Home Assistant
 
+**Requer**: Token JWT do tipo `frontend`
+
 ### Health Checks
 
-- `GET /api/v1/health` - Health check da API
-- `GET /api/v1/health/detailed` - Health check detalhado
+- `GET /api/v1/health` - Health check básico da API
+- `GET /api/v1/health/detailed` - Health check detalhado (Kafka, Redis, MinIO, TimescaleDB)
+
+**Não requer**: Autenticação
 
 ## 🗄️ Object Storage (MinIO)
 
@@ -250,13 +316,60 @@ Dados são processados de forma assíncrona:
 
 Proprietário - Datacase
 
+## 📋 Histórico de Versões (Changelog)
+
+### [1.1.0] - 2024-01-15 - Versão Estável
+
+**Melhorias e Correções:**
+- ✅ **Segurança Aprimorada**: Defense in Depth implementado
+  - Autenticação separada para dispositivos e frontend
+  - Gerenciamento de status de usuários (Ativo, Inativo, Bloqueado, Temporariamente Bloqueado)
+  - Penalty Box com backoff exponencial
+  - Prevenção de uploads concorrentes
+  - Blacklist em Redis
+  - Logging estruturado para Fail2Ban
+- ✅ **Swagger/OpenAPI**: Documentação interativa adicionada em `/api/v1/docs`
+- ✅ **Limpeza de Código**: Remoção de imports não utilizados
+- ✅ **Correção Docker Compose**: Volumes duplicados e incorretos corrigidos
+- ✅ **Documentação Atualizada**: Todos os arquivos .md atualizados
+
+**Funcionalidades Mantidas:**
+- Arquitetura Distribuída (Node.js Gateway + Kafka + Python Workers)
+- Claim Check Pattern
+- TimescaleDB Continuous Aggregates
+- Endpoints Analytics Otimizados
+- Health Checks
+
+### [1.0.0] - 2024-01-15 - Versão Estável Inicial
+
+**Funcionalidades Principais:**
+- ✅ **Arquitetura Distribuída**: Node.js Gateway + Kafka + Python Workers
+- ✅ **Claim Check Pattern**: Object Storage (MinIO) + Kafka para payloads grandes
+- ✅ **TimescaleDB Continuous Aggregates**: Agregações horárias e diárias automáticas
+- ✅ **Endpoints Analytics**: Consultas otimizadas para dashboards e Home Assistant
+- ✅ **Autenticação JWT**: Tokens com refresh e separação por tipo de usuário
+- ✅ **Rate Limiting**: Por IP e usuário usando Redis
+- ✅ **Health Checks**: Básico e detalhado
+
+**Performance:**
+- Throughput Gateway: 10,000+ requisições/segundo
+- Latência Gateway: 10-50ms (p95)
+- Throughput Kafka: 100,000+ mensagens/segundo
+- Queries Analytics: 10-50ms (100-2000x mais rápido)
+
+---
+
+Para o changelog completo e detalhado, consulte: **CHANGELOG.md**
+
 ## 📚 Documentação Adicional
 
+- **Swagger/OpenAPI**: `http://localhost:8000/api/v1/docs` (Documentação interativa)
 - **ARCHITECTURE.md**: Detalhes técnicos da arquitetura
 - **DEPLOYMENT.md**: Guia completo de deploy e configuração
 - **TIMESCALEDB_SETUP.md**: Setup e configuração do TimescaleDB
-- **API_ANALYTICS.md**: Documentação dos endpoints de analytics
-- **CHANGELOG.md**: Histórico de versões
+- **API_ANALYTICS.md**: Documentação detalhada dos endpoints de analytics
+- **SECURITY.md**: Detalhes de segurança e Defense in Depth
+- **CHANGELOG.md**: Histórico completo e detalhado de versões
 
 ## 🆘 Suporte
 
@@ -268,4 +381,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**Backend v1.0.0 estável - Pronto para produção!** 🚀
+**Backend v1.1.0 estável - Pronto para produção!** 🚀

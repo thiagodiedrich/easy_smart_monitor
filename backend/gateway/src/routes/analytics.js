@@ -423,9 +423,32 @@ export async function getHomeAssistantData(request, reply) {
  * Registra rotas de analytics
  */
 export async function analyticsRoutes(fastify, options) {
+  // Middleware de autenticação (apenas frontend pode acessar analytics)
+  fastify.addHook('onRequest', async (request, reply) => {
+    try {
+      await request.jwtVerify();
+      
+      // Verificar se é frontend
+      if (request.user.user_type !== 'frontend') {
+        logger.warn('Tentativa de acessar analytics com token não-frontend', {
+          user_type: request.user.user_type,
+          username: request.user.sub,
+        });
+        return reply.code(403).send({ 
+          error: 'FORBIDDEN',
+          message: 'Apenas usuários frontend podem acessar analytics' 
+        });
+      }
+    } catch (err) {
+      return reply.code(401).send({ 
+        error: 'UNAUTHORIZED',
+        message: 'Não autorizado' 
+      });
+    }
+  });
+  
   // Histórico de equipamento
   fastify.get('/analytics/equipment/:equipmentUuid/history', {
-    preHandler: [fastify.authenticate],
     schema: {
       params: {
         type: 'object',
@@ -448,7 +471,6 @@ export async function analyticsRoutes(fastify, options) {
   
   // Histórico de sensor
   fastify.get('/analytics/sensor/:sensorUuid/history', {
-    preHandler: [fastify.authenticate],
     schema: {
       params: {
         type: 'object',
@@ -470,7 +492,6 @@ export async function analyticsRoutes(fastify, options) {
   
   // Estatísticas de equipamento
   fastify.get('/analytics/equipment/:equipmentUuid/stats', {
-    preHandler: [fastify.authenticate],
     schema: {
       params: {
         type: 'object',
@@ -491,7 +512,6 @@ export async function analyticsRoutes(fastify, options) {
   
   // Dados para Home Assistant
   fastify.get('/analytics/home-assistant/:equipmentUuid', {
-    preHandler: [fastify.authenticate],
     schema: {
       params: {
         type: 'object',

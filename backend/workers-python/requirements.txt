@@ -13,6 +13,9 @@ psycopg2-binary==2.9.9
 # JSON rápido
 orjson==3.9.10
 
+# Autenticação
+bcrypt==4.1.2
+
 # Configuração
 pydantic==2.5.0
 pydantic-settings==2.1.0
