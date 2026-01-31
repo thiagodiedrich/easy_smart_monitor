@@ -86,6 +86,8 @@ export const authRoutes = async (fastify) => {
         sub: user.username,
         user_id: user.id,
         tenant_id: user.tenant_id,
+        organization_id: user.organization_id,
+        workspace_id: user.workspace_id,
         user_type: UserType.FRONTEND,
         type: 'access' 
       },
@@ -97,6 +99,8 @@ export const authRoutes = async (fastify) => {
         sub: user.username,
         user_id: user.id,
         tenant_id: user.tenant_id,
+        organization_id: user.organization_id,
+        workspace_id: user.workspace_id,
         user_type: UserType.FRONTEND,
         type: 'refresh' 
       },
@@ -182,6 +186,8 @@ export const authRoutes = async (fastify) => {
         sub: user.username,
         user_id: user.id,
         tenant_id: user.tenant_id,
+        organization_id: user.organization_id,
+        workspace_id: user.workspace_id,
         user_type: UserType.DEVICE,
         device_id: device_id || 'unknown',
         type: 'access' 
@@ -194,6 +200,8 @@ export const authRoutes = async (fastify) => {
         sub: user.username,
         user_id: user.id,
         tenant_id: user.tenant_id,
+        organization_id: user.organization_id,
+        workspace_id: user.workspace_id,
         user_type: UserType.DEVICE,
         device_id: device_id || 'unknown',
         type: 'refresh' 
@@ -262,6 +270,8 @@ export const authRoutes = async (fastify) => {
           sub: decoded.sub,
           user_id: decoded.user_id,
           tenant_id: decoded.tenant_id,
+          organization_id: decoded.organization_id,
+          workspace_id: decoded.workspace_id,
           user_type: decoded.user_type,
           device_id: decoded.device_id,
           type: 'access' 
@@ -306,6 +316,8 @@ export const authRoutes = async (fastify) => {
         username: request.user.sub,
         user_id: request.user.user_id,
         tenant_id: request.user.tenant_id,
+        organization_id: request.user.organization_id,
+        workspace_id: request.user.workspace_id,
         user_type: request.user.user_type,
         device_id: request.user.device_id,
       };

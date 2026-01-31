@@ -20,12 +20,15 @@ function resolveTenantScope(request, reply) {
     });
     return null;
   }
-
-  return { tenantId, organizationId, workspaceId };
+  const isSystemTenant = tenantId !== null && Number(tenantId) === 0;
+  return { tenantId, organizationId, workspaceId, isSystemTenant };
 }
 
 function appendTenantFilters(scope, params, tableAlias = 'e') {
   if (!scope) {
+    return '';
+  }
+  if (scope.isSystemTenant) {
     return '';
   }
 

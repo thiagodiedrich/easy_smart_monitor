@@ -173,18 +173,72 @@ export const telemetryRoutes = async (fastify) => {
         const projectedBytes = Number(usage.bytes_ingested || 0) + payloadBytes;
 
         if (quota.items_per_day && projectedItems > Number(quota.items_per_day)) {
+          if (config.billing.eventsEnabled) {
+            try {
+              await queryDatabase(
+                `
+                  INSERT INTO tenant_billing_events (tenant_id, event_type, message, metadata)
+                  VALUES ($1, $2, $3, $4)
+                `,
+                [
+                  tenantId,
+                  'quota_exceeded',
+                  'Limite diário de itens excedido',
+                  { items_per_day: quota.items_per_day, projected_items: projectedItems },
+                ]
+              );
+            } catch (err) {
+              logger.warn('Falha ao registrar billing event', { error: err.message });
+            }
+          }
           return reply.code(429).send({
             error: 'QUOTA_EXCEEDED',
             message: 'Limite diário de itens excedido',
           });
         }
         if (quota.sensors_per_day && projectedSensors > Number(quota.sensors_per_day)) {
+          if (config.billing.eventsEnabled) {
+            try {
+              await queryDatabase(
+                `
+                  INSERT INTO tenant_billing_events (tenant_id, event_type, message, metadata)
+                  VALUES ($1, $2, $3, $4)
+                `,
+                [
+                  tenantId,
+                  'quota_exceeded',
+                  'Limite diário de sensores excedido',
+                  { sensors_per_day: quota.sensors_per_day, projected_sensors: projectedSensors },
+                ]
+              );
+            } catch (err) {
+              logger.warn('Falha ao registrar billing event', { error: err.message });
+            }
+          }
           return reply.code(429).send({
             error: 'QUOTA_EXCEEDED',
             message: 'Limite diário de sensores excedido',
           });
         }
         if (quota.bytes_per_day && projectedBytes > Number(quota.bytes_per_day)) {
+          if (config.billing.eventsEnabled) {
+            try {
+              await queryDatabase(
+                `
+                  INSERT INTO tenant_billing_events (tenant_id, event_type, message, metadata)
+                  VALUES ($1, $2, $3, $4)
+                `,
+                [
+                  tenantId,
+                  'quota_exceeded',
+                  'Limite diário de bytes excedido',
+                  { bytes_per_day: quota.bytes_per_day, projected_bytes: projectedBytes },
+                ]
+              );
+            } catch (err) {
+              logger.warn('Falha ao registrar billing event', { error: err.message });
+            }
+          }
           return reply.code(429).send({
             error: 'QUOTA_EXCEEDED',
             message: 'Limite diário de bytes excedido',

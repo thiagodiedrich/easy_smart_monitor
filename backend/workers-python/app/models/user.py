@@ -37,6 +37,8 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=True)
     hashed_password = Column(String(255), nullable=False)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    organization_id = Column(Integer, nullable=True, index=True)
+    workspace_id = Column(Integer, nullable=True, index=True)
     
     # Tipo de usuário (frontend ou device)
     user_type = Column(

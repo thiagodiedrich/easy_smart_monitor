@@ -14,6 +14,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import { kafkaProducer } from './kafka/producer.js';
 import { initStorage } from './storage/storage.js';
 import { initDatabasePool, closeDatabasePool } from './utils/database.js';
+import { bootstrapMasterAdmin } from './utils/bootstrap.js';
 import { authRoutes } from './routes/auth.js';
 import { telemetryRoutes } from './routes/telemetry.js';
 import { analyticsRoutes } from './routes/analytics.js';
@@ -165,6 +166,9 @@ initStorage();
 
 // Inicializar pool de conexões do banco
 initDatabasePool();
+
+// Bootstrap usuário master (se habilitado)
+await bootstrapMasterAdmin();
 
 // Registrar rotas
 await app.register(authRoutes, { prefix: '/api/v1/auth' });

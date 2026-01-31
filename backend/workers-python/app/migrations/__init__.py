@@ -12,4 +12,6 @@ Ordem de execução:
 8. 008_org_workspace_in_equipments - organization_id e workspace_id em equipments (Fase 2)
 9. 009_tenant_usage_daily - tabela de uso diário por tenant (Fase 4)
 10. 010_plans_and_limits - planos e limites por tenant (Fase 5)
+11. 011_tenant_billing_events - eventos de billing por tenant (Fase 6)
+12. 012_org_workspace_in_users - organization_id/workspace_id em users
 """

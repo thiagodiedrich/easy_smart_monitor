@@ -70,4 +70,9 @@ export default {
     enforce: (process.env.QUOTA_ENFORCE || 'false').toLowerCase() === 'true',
     estimateBytes: (process.env.QUOTA_ESTIMATE_BYTES || 'false').toLowerCase() === 'true',
   },
+
+  // Billing / Eventos (Fase 6)
+  billing: {
+    eventsEnabled: (process.env.BILLING_EVENTS_ENABLED || 'false').toLowerCase() === 'true',
+  },
 };
