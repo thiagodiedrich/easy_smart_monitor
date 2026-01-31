@@ -21,10 +21,27 @@ async def upgrade():
         try:
             # 1. Garantir tenant padrão
             await db.execute(text("""
-                INSERT INTO tenants (name, slug, status)
-                VALUES (:name, :slug, 'active')
+                INSERT INTO tenants (name, slug, status, is_white_label, created_at, updated_at)
+                VALUES (:name, :slug, 'active', FALSE, NOW(), NOW())
                 ON CONFLICT (slug) DO NOTHING;
             """), {"name": DEFAULT_TENANT_NAME, "slug": DEFAULT_TENANT_SLUG})
+            await db.commit()
+
+            # Garantir is_white_label não nulo em tenants existentes
+            await db.execute(text("""
+                UPDATE tenants
+                SET is_white_label = FALSE
+                WHERE is_white_label IS NULL;
+            """))
+            await db.commit()
+
+            # Garantir created_at/updated_at não nulos em tenants existentes
+            await db.execute(text("""
+                UPDATE tenants
+                SET created_at = COALESCE(created_at, NOW()),
+                    updated_at = COALESCE(updated_at, NOW())
+                WHERE created_at IS NULL OR updated_at IS NULL;
+            """))
             await db.commit()
 
             # 2. Obter tenant_id padrão

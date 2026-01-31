@@ -18,9 +18,25 @@ async def upgrade():
         try:
             # Garantir tenant sistema (id=0)
             await db.execute(text("""
-                INSERT INTO tenants (id, name, slug, status)
-                VALUES (0, 'System', 'system', 'active')
+                INSERT INTO tenants (id, name, slug, status, is_white_label, created_at, updated_at)
+                VALUES (0, 'System', 'system', 'active', FALSE, NOW(), NOW())
                 ON CONFLICT DO NOTHING;
+            """))
+            await db.commit()
+
+            # Garantir is_white_label/created_at/updated_at não nulos em tenants existentes
+            await db.execute(text("""
+                UPDATE tenants
+                SET is_white_label = FALSE
+                WHERE is_white_label IS NULL;
+            """))
+            await db.commit()
+
+            await db.execute(text("""
+                UPDATE tenants
+                SET created_at = COALESCE(created_at, NOW()),
+                    updated_at = COALESCE(updated_at, NOW())
+                WHERE created_at IS NULL OR updated_at IS NULL;
             """))
             await db.commit()
 
@@ -32,6 +48,18 @@ async def upgrade():
                     WHEN duplicate_object THEN null;
                 END $$;
             """))
+            await db.commit()
+
+            await db.execute(text("""
+                DO $$ BEGIN
+                    ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'admin';
+                    ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'manager';
+                    ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'viewer';
+                EXCEPTION
+                    WHEN duplicate_object THEN null;
+                END $$;
+            """))
+            await db.commit()
 
             # Ajustar tenant_id: garantir preenchido e NOT NULL
             await db.execute(text("""
@@ -50,12 +78,12 @@ async def upgrade():
             # Converter organization_id/workspace_id para arrays e default {0}
             await db.execute(text("""
                 UPDATE users
-                SET organization_id = 0
+                SET organization_id = ARRAY[0]
                 WHERE organization_id IS NULL;
             """))
             await db.execute(text("""
                 UPDATE users
-                SET workspace_id = 0
+                SET workspace_id = ARRAY[0]
                 WHERE workspace_id IS NULL;
             """))
             await db.commit()

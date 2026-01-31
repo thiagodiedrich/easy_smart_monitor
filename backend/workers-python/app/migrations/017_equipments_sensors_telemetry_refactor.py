@@ -37,23 +37,67 @@ async def upgrade():
             """))
             await db.commit()
 
+            # Garantir valores do enum (caso já exista com labels diferentes)
+            await db.execute(text("""
+                DO $$ BEGIN
+                    ALTER TYPE entity_status ADD VALUE IF NOT EXISTS 'active';
+                    ALTER TYPE entity_status ADD VALUE IF NOT EXISTS 'inactive';
+                    ALTER TYPE entity_status ADD VALUE IF NOT EXISTS 'blocked';
+                EXCEPTION
+                    WHEN duplicate_object THEN null;
+                END $$;
+            """))
+            await db.commit()
+
             # Garantir tenant/org/workspace 0 (fallback)
             await db.execute(text("""
-                INSERT INTO tenants (id, name, slug, status)
-                VALUES (0, 'System', 'system', 'active')
+                INSERT INTO tenants (id, name, slug, status, is_white_label, created_at, updated_at)
+                VALUES (0, 'System', 'system', 'active', FALSE, NOW(), NOW())
                 ON CONFLICT DO NOTHING;
             """))
             await db.commit()
             await db.execute(text("""
-                INSERT INTO organizations (id, tenant_id, name)
-                VALUES (0, 0, 'System Org')
+                INSERT INTO organizations (id, tenant_id, name, created_at, updated_at)
+                VALUES (0, 0, 'System Org', NOW(), NOW())
                 ON CONFLICT DO NOTHING;
             """))
             await db.commit()
             await db.execute(text("""
-                INSERT INTO workspaces (id, organization_id, name)
-                VALUES (0, 0, 'System Workspace')
+                INSERT INTO workspaces (id, organization_id, name, created_at, updated_at)
+                VALUES (0, 0, 'System Workspace', NOW(), NOW())
                 ON CONFLICT DO NOTHING;
+            """))
+            await db.commit()
+
+            # Garantir is_white_label/created_at/updated_at não nulos em tenants existentes
+            await db.execute(text("""
+                UPDATE tenants
+                SET is_white_label = FALSE
+                WHERE is_white_label IS NULL;
+            """))
+            await db.commit()
+
+            await db.execute(text("""
+                UPDATE tenants
+                SET created_at = COALESCE(created_at, NOW()),
+                    updated_at = COALESCE(updated_at, NOW())
+                WHERE created_at IS NULL OR updated_at IS NULL;
+            """))
+            await db.commit()
+
+            await db.execute(text("""
+                UPDATE organizations
+                SET created_at = COALESCE(created_at, NOW()),
+                    updated_at = COALESCE(updated_at, NOW())
+                WHERE created_at IS NULL OR updated_at IS NULL;
+            """))
+            await db.commit()
+
+            await db.execute(text("""
+                UPDATE workspaces
+                SET created_at = COALESCE(created_at, NOW()),
+                    updated_at = COALESCE(updated_at, NOW())
+                WHERE created_at IS NULL OR updated_at IS NULL;
             """))
             await db.commit()
 
