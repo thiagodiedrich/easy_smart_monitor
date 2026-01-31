@@ -21,6 +21,7 @@ export async function bootstrapMasterAdmin() {
     return;
   }
 
+  const name = process.env.MASTER_ADMIN_NAME || null;
   const username = process.env.MASTER_ADMIN_USERNAME;
   const password = process.env.MASTER_ADMIN_PASSWORD;
   const email = process.env.MASTER_ADMIN_EMAIL || null;
@@ -28,6 +29,17 @@ export async function bootstrapMasterAdmin() {
   const organizationId = parseIntOrNull(process.env.MASTER_ADMIN_ORGANIZATION_ID, 0);
   const workspaceId = parseIntOrNull(process.env.MASTER_ADMIN_WORKSPACE_ID, 0);
   const defaultPlanCode = process.env.DEFAULT_PLAN_CODE || null;
+  const roleEnv = process.env.MASTER_ADMIN_ROLE || '{0}';
+
+  let roleValue = [0];
+  try {
+    if (roleEnv) {
+      const normalized = roleEnv === '{0}' ? '[0]' : roleEnv;
+      roleValue = JSON.parse(normalized);
+    }
+  } catch {
+    roleValue = [0];
+  }
 
   if (!username || !password) {
     logger.warn('MASTER_ADMIN habilitado, mas username/senha não definidos');
@@ -97,6 +109,7 @@ export async function bootstrapMasterAdmin() {
   await queryDatabase(
     `
       INSERT INTO users (
+        name,
         username,
         email,
         hashed_password,
@@ -110,9 +123,9 @@ export async function bootstrapMasterAdmin() {
         role,
         created_at,
         updated_at
-      ) VALUES ($1, $2, $3, 'frontend', 'active', 0, NULL, $4, $5, $6, 'admin', NOW(), NOW())
+      ) VALUES ($1, $2, $3, $4, 'frontend', 'active', 0, NULL, $5, $6, $7, $8::jsonb, NOW(), NOW())
     `,
-    [username, email, hashedPassword, tenantId, [organizationId], [workspaceId]]
+    [name || username, username, email, hashedPassword, tenantId, [organizationId], [workspaceId], JSON.stringify(roleValue)]
   );
 
   logger.info('Usuário master criado com sucesso', {

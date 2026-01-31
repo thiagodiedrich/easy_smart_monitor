@@ -7,6 +7,9 @@ import { queryDatabase } from './database.js';
 import { logger } from './logger.js';
 import bcrypt from 'bcrypt';
 
+const maxAttempts = parseInt(process.env.LOGIN_MAX_ATTEMPTS || '5', 10);
+const blockMinutes = parseInt(process.env.LOGIN_BLOCK_MINUTES || '30', 10);
+
 /**
  * Status do usuário
  */
@@ -181,16 +184,16 @@ async function recordFailedLogin(userId) {
       SET 
         failed_login_attempts = failed_login_attempts + 1,
         locked_until = CASE
-          WHEN failed_login_attempts + 1 >= 5 THEN NOW() + INTERVAL '30 minutes'
+          WHEN failed_login_attempts + 1 >= $2 THEN NOW() + ($3::text || ' minutes')::interval
           ELSE locked_until
         END
       WHERE id = $1
       RETURNING failed_login_attempts, locked_until
     `;
     
-    const result = await queryDatabase(query, [userId]);
+    const result = await queryDatabase(query, [userId, maxAttempts, blockMinutes]);
     
-    if (result && result[0] && result[0].failed_login_attempts >= 5) {
+    if (result && result[0] && result[0].failed_login_attempts >= maxAttempts) {
       logger.warn('Usuário bloqueado após múltiplas tentativas falhadas', {
         userId,
         attempts: result[0].failed_login_attempts,

@@ -22,6 +22,7 @@ import { healthRoutes } from './routes/health.js';
 import { adminRoutes } from './routes/admin.js';
 import { tenantRoutes } from './routes/tenant.js';
 import { logger } from './utils/logger.js';
+import { queryDatabase } from './utils/database.js';
 import config from './config.js';
 
 // Criar instância Fastify
@@ -89,6 +90,55 @@ await app.register(swaggerUi, {
   },
   staticCSP: true,
   transformStaticCSP: (header) => header,
+});
+
+const auditLogEnabled = (process.env.AUDIT_LOG_ENABLED || 'true').toLowerCase() === 'true';
+
+app.addHook('onRequest', async (request) => {
+  request.auditStartTime = Date.now();
+});
+
+app.addHook('onResponse', async (request, reply) => {
+  if (!auditLogEnabled) {
+    return;
+  }
+  try {
+    const durationMs = Date.now() - (request.auditStartTime || Date.now());
+    const action = `${request.method} ${request.url}`;
+    const metadata = {
+      method: request.method,
+      url: request.url,
+      statusCode: reply.statusCode,
+      duration_ms: durationMs,
+      ip: request.ip,
+      user_agent: request.headers['user-agent'],
+      request_id: request.id,
+    };
+    await queryDatabase(
+      `
+        INSERT INTO audit_logs (
+          tenant_id,
+          actor_user_id,
+          actor_role,
+          action,
+          target_type,
+          target_id,
+          metadata
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [
+        request.user?.tenant_id ?? null,
+        request.user?.user_id ?? null,
+        request.user?.role ?? null,
+        action,
+        'api_request',
+        request.id ? String(request.id) : null,
+        metadata,
+      ]
+    );
+  } catch (error) {
+    logger.warn('Falha ao registrar audit log global', { error: error.message });
+  }
 });
 
 // Rate limiting

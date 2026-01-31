@@ -13,6 +13,9 @@ import { queryDatabase } from '../utils/database.js';
 import config from '../config.js';
 import bcrypt from 'bcrypt';
 
+const maxAttempts = parseInt(process.env.LOGIN_MAX_ATTEMPTS || '5', 10);
+const blockMinutes = parseInt(process.env.LOGIN_BLOCK_MINUTES || '30', 10);
+
 /**
  * Obtém IP real do cliente
  */
@@ -66,7 +69,7 @@ export const authRoutes = async (fastify) => {
     if (!username || !password) {
       return reply.code(401).send({ 
         error: 'INVALID_CREDENTIALS',
-        message: 'Credenciais inválidas' 
+        message: `Credenciais inválidas. Após ${maxAttempts} tentativas seguidas, você ficará bloqueado por ${blockMinutes} minutos.` 
       });
     }
     
@@ -82,7 +85,7 @@ export const authRoutes = async (fastify) => {
     if (!user) {
       return reply.code(401).send({ 
         error: 'INVALID_CREDENTIALS',
-        message: 'Credenciais inválidas' 
+        message: `Credenciais inválidas. Após ${maxAttempts} tentativas seguidas, você ficará bloqueado por ${blockMinutes} minutos.` 
       });
     }
     
@@ -170,7 +173,7 @@ export const authRoutes = async (fastify) => {
     if (!username || !password) {
       return reply.code(401).send({ 
         error: 'INVALID_CREDENTIALS',
-        message: 'Credenciais inválidas' 
+        message: `Credenciais inválidas. Após ${maxAttempts} tentativas seguidas, você ficará bloqueado por ${blockMinutes} minutos.` 
       });
     }
     
@@ -186,7 +189,7 @@ export const authRoutes = async (fastify) => {
     if (!user) {
       return reply.code(401).send({ 
         error: 'INVALID_CREDENTIALS',
-        message: 'Credenciais inválidas' 
+        message: `Credenciais inválidas. Após ${maxAttempts} tentativas seguidas, você ficará bloqueado por ${blockMinutes} minutos.` 
       });
     }
     

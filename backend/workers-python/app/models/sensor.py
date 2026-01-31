@@ -59,3 +59,23 @@ class Sensor(Base):
         """Busca sensor por UUID."""
         result = await db.execute(select(cls).where(cls.uuid == uuid))
         return result.scalar_one_or_none()
+
+    @classmethod
+    async def get_by_uuid_scoped(
+        cls,
+        db: AsyncSession,
+        uuid: str,
+        tenant_id: int,
+        organization_id: int,
+        workspace_id: int,
+    ) -> Optional["Sensor"]:
+        """Busca sensor por UUID e escopo."""
+        result = await db.execute(
+            select(cls).where(
+                cls.uuid == uuid,
+                cls.tenant_id == tenant_id,
+                cls.organization_id == organization_id,
+                cls.workspace_id == workspace_id,
+            )
+        )
+        return result.scalar_one_or_none()

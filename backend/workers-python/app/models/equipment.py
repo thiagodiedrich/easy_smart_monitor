@@ -20,7 +20,7 @@ class Equipment(Base):
     __tablename__ = "equipments"
     
     id = Column(Integer, primary_key=True, index=True)
-    uuid = Column(String(36), unique=True, index=True, nullable=False)
+    uuid = Column(String(36), index=True, nullable=False)
     name = Column(String(200), nullable=False)
     class Status(str, enum.Enum):
         ACTIVE = "active"
@@ -50,4 +50,24 @@ class Equipment(Base):
     async def get_by_uuid(cls, db: AsyncSession, uuid: str) -> Optional["Equipment"]:
         """Busca equipamento por UUID."""
         result = await db.execute(select(cls).where(cls.uuid == uuid))
+        return result.scalar_one_or_none()
+
+    @classmethod
+    async def get_by_uuid_scoped(
+        cls,
+        db: AsyncSession,
+        uuid: str,
+        tenant_id: int,
+        organization_id: int,
+        workspace_id: int,
+    ) -> Optional["Equipment"]:
+        """Busca equipamento por UUID e escopo."""
+        result = await db.execute(
+            select(cls).where(
+                cls.uuid == uuid,
+                cls.tenant_id == tenant_id,
+                cls.organization_id == organization_id,
+                cls.workspace_id == workspace_id,
+            )
+        )
         return result.scalar_one_or_none()

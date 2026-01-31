@@ -4,10 +4,39 @@
 import { queryDatabase } from '../utils/database.js';
 import { logger } from '../utils/logger.js';
 
-function isSystemAdmin(request) {
-  const tenantId = request.user?.tenant_id;
+function getRoleName(role) {
+  if (!role) return null;
+  if (typeof role === 'string') return role;
+  if (Array.isArray(role)) {
+    if (role.includes(0) || role.includes('0')) return 'super';
+    if (role.includes('admin')) return 'admin';
+    if (role.includes('manager')) return 'manager';
+    if (role.includes('viewer')) return 'viewer';
+    return null;
+  }
+  if (typeof role === 'object') {
+    if (role[0] === true || role['0'] === true || role.super === true) return 'super';
+    if (role.role) return role.role;
+    if (role.name) return role.name;
+    return null;
+  }
+  return null;
+}
+
+function isSuperUser(request) {
   const role = request.user?.role;
-  return Number(tenantId) === 0 && role === 'admin';
+  return Array.isArray(role)
+    ? role.includes(0) || role.includes('0')
+    : Boolean(role && typeof role === 'object' && (role[0] === true || role['0'] === true || role.super === true));
+}
+
+function isSystemAdmin(request) {
+  if (isSuperUser(request)) {
+    return true;
+  }
+  const tenantId = request.user?.tenant_id;
+  const roleName = getRoleName(request.user?.role);
+  return Number(tenantId) === 0 && roleName === 'admin';
 }
 
 async function auditLog(request, action, targetType, targetId, metadata = {}) {
@@ -60,7 +89,16 @@ export const adminRoutes = async (fastify) => {
 
   // Tenants
   fastify.post('/tenants', async (request, reply) => {
-    const { name, slug, status = 'active', plan_code, is_white_label = false } = request.body || {};
+    const {
+      name,
+      slug,
+      status = 'active',
+      plan_code,
+      is_white_label = false,
+      document,
+      phone,
+      email,
+    } = request.body || {};
     if (!name || !slug) {
       return reply.code(400).send({ error: 'name e slug são obrigatórios' });
     }
@@ -72,8 +110,17 @@ export const adminRoutes = async (fastify) => {
       `,
       [name, slug, status, plan_code || null, !!is_white_label]
     );
-    await auditLog(request, 'create', 'tenant', result[0]?.id, { name, slug });
-    return reply.code(201).send({ id: result[0]?.id });
+    const tenantId = result[0]?.id;
+
+    await queryDatabase(
+      `
+        INSERT INTO organizations (tenant_id, name, document, phone, email, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      `,
+      [tenantId, name, document || null, phone || null, email || null]
+    );
+    await auditLog(request, 'create', 'tenant', tenantId, { name, slug });
+    return reply.code(201).send({ id: tenantId });
   });
 
   fastify.get('/tenants', async (_request, reply) => {

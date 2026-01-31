@@ -44,6 +44,10 @@ async def run_migrations(command):
         "021_fix_usertype_enum",
         "022_user_type_default_frontend",
         "023_fix_userstatus_enum",
+        "024_role_json_permissions",
+        "025_add_user_name",
+        "026_add_org_contact_fields",
+        "027_equipments_unique_scope",
     ]
     migrations = [(name, *_load_migration(name)) for name in migration_names]
     

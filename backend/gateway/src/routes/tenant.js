@@ -5,9 +5,61 @@ import { queryDatabase } from '../utils/database.js';
 import { logger } from '../utils/logger.js';
 import bcrypt from 'bcrypt';
 
-function isTenantAdmin(request) {
+function getRoleName(role) {
+  if (!role) return null;
+  if (typeof role === 'string') return role;
+  if (Array.isArray(role)) {
+    if (role.includes(0) || role.includes('0')) return 'super';
+    if (role.includes('admin')) return 'admin';
+    if (role.includes('manager')) return 'manager';
+    if (role.includes('viewer')) return 'viewer';
+    return null;
+  }
+  if (typeof role === 'object') {
+    if (role[0] === true || role['0'] === true || role.super === true) return 'super';
+    if (role.role) return role.role;
+    if (role.name) return role.name;
+    return null;
+  }
+  return null;
+}
+
+function isSuperUser(request) {
   const role = request.user?.role;
-  return role === 'admin' || role === 'manager';
+  return Array.isArray(role)
+    ? role.includes(0) || role.includes('0')
+    : Boolean(role && typeof role === 'object' && (role[0] === true || role['0'] === true || role.super === true));
+}
+
+function isTenantAdmin(request) {
+  if (isSuperUser(request)) {
+    return true;
+  }
+  const roleName = getRoleName(request.user?.role);
+  return roleName === 'admin' || roleName === 'manager';
+}
+
+function normalizeRolePayload(role) {
+  if (role === undefined || role === null || role === '') {
+    return { role: 'viewer' };
+  }
+  if (Array.isArray(role) || typeof role === 'object') {
+    return role;
+  }
+  if (typeof role === 'string') {
+    return { role };
+  }
+  return { role: 'viewer' };
+}
+
+function hasSuperRole(role) {
+  if (Array.isArray(role)) {
+    return role.includes(0) || role.includes('0');
+  }
+  if (role && typeof role === 'object') {
+    return role[0] === true || role['0'] === true || role.super === true;
+  }
+  return false;
 }
 
 function normalizeScopeArray(value) {
@@ -121,7 +173,7 @@ export const tenantRoutes = async (fastify) => {
   fastify.addHook('onRequest', async (request, reply) => {
     try {
       await request.jwtVerify();
-      if (Number(request.user?.tenant_id) === 0 || !isTenantAdmin(request)) {
+      if (!isTenantAdmin(request)) {
         return reply.code(403).send({
           error: 'FORBIDDEN',
           message: 'Acesso restrito ao admin do tenant',
@@ -137,7 +189,7 @@ export const tenantRoutes = async (fastify) => {
 
   // Organizations
   fastify.post('/organizations', async (request, reply) => {
-    const { name } = request.body || {};
+    const { name, document, phone, email } = request.body || {};
     if (!name) {
       return reply.code(400).send({ error: 'name é obrigatório' });
     }
@@ -154,11 +206,11 @@ export const tenantRoutes = async (fastify) => {
     }
     const result = await queryDatabase(
       `
-        INSERT INTO organizations (tenant_id, name, created_at, updated_at)
-        VALUES ($1, $2, NOW(), NOW())
+        INSERT INTO organizations (tenant_id, name, document, phone, email, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
         RETURNING id
       `,
-      [request.user.tenant_id, name]
+      [request.user.tenant_id, name, document || null, phone || null, email || null]
     );
     await auditLog(request, 'create', 'organization', result[0]?.id, { name });
     return reply.code(201).send({ id: result[0]?.id });
@@ -174,16 +226,21 @@ export const tenantRoutes = async (fastify) => {
 
   fastify.put('/organizations/:id', async (request, reply) => {
     const { id } = request.params;
-    const { name } = request.body || {};
+    const { name, document, phone, email } = request.body || {};
     await queryDatabase(
       `
         UPDATE organizations
-        SET name = COALESCE($1, name), updated_at = NOW()
-        WHERE id = $2 AND tenant_id = $3
+        SET
+          name = COALESCE($1, name),
+          document = COALESCE($2, document),
+          phone = COALESCE($3, phone),
+          email = COALESCE($4, email),
+          updated_at = NOW()
+        WHERE id = $5 AND tenant_id = $6
       `,
-      [name || null, id, request.user.tenant_id]
+      [name || null, document || null, phone || null, email || null, id, request.user.tenant_id]
     );
-    await auditLog(request, 'update', 'organization', id, { name });
+    await auditLog(request, 'update', 'organization', id, { name, document, phone, email });
     return reply.send({ status: 'ok' });
   });
 
@@ -405,6 +462,7 @@ export const tenantRoutes = async (fastify) => {
   fastify.post('/users', async (request, reply) => {
     const {
       username,
+      name,
       email,
       password,
       role = 'viewer',
@@ -440,25 +498,29 @@ export const tenantRoutes = async (fastify) => {
       return reply.code(400).send({ error: scopeCheck.error });
     }
 
+    const rolePayload = normalizeRolePayload(role);
+    if (hasSuperRole(rolePayload)) {
+      return reply.code(403).send({ error: 'Role reservado ao master admin' });
+    }
     const hashed = await bcrypt.hash(password, 10);
     const result = await queryDatabase(
       `
         INSERT INTO users (
-          username, email, hashed_password,
+          name, username, email, hashed_password,
           tenant_id, organization_id, workspace_id,
           role, user_type, status,
           created_at, updated_at
         ) VALUES (
-          $1, $2, $3,
-          $4, $5, $6,
-          $7, 'frontend', $8,
+          $1, $2, $3, $4,
+          $5, $6, $7,
+          $8::jsonb, 'frontend', $9,
           NOW(), NOW()
         )
         RETURNING id
       `,
-      [username, email || null, hashed, request.user.tenant_id, orgIds, wsIds, role, status]
+      [name || null, username, email || null, hashed, request.user.tenant_id, orgIds, wsIds, JSON.stringify(rolePayload), status]
     );
-    await auditLog(request, 'create', 'user', result[0]?.id, { username, role, status });
+    await auditLog(request, 'create', 'user', result[0]?.id, { username, role: rolePayload, status });
     return reply.code(201).send({ id: result[0]?.id });
   });
 
@@ -564,7 +626,9 @@ export const tenantRoutes = async (fastify) => {
     if (!targetUser || targetUser.length === 0) {
       return reply.code(404).send({ error: 'Usuário não encontrado' });
     }
-    if (request.user.role === 'manager' && targetUser[0].role === 'admin') {
+    const actorRole = getRoleName(request.user?.role);
+    const targetRole = getRoleName(targetUser[0].role);
+    if (actorRole === 'manager' && targetRole === 'admin') {
       return reply.code(403).send({ error: 'Manager não pode alterar admin' });
     }
 
@@ -579,21 +643,25 @@ export const tenantRoutes = async (fastify) => {
       return reply.code(400).send({ error: scopeCheck.error });
     }
 
+    const rolePayload = role ? normalizeRolePayload(role) : null;
+    if (rolePayload && hasSuperRole(rolePayload)) {
+      return reply.code(403).send({ error: 'Role reservado ao master admin' });
+    }
     await queryDatabase(
       `
         UPDATE users
         SET
           email = COALESCE($1, email),
-          role = COALESCE($2, role),
+          role = COALESCE($2::jsonb, role),
           status = COALESCE($3, status),
           organization_id = COALESCE($4, organization_id),
           workspace_id = COALESCE($5, workspace_id),
           updated_at = NOW()
         WHERE id = $6 AND tenant_id = $7
       `,
-      [email || null, role || null, status || null, orgIds, wsIds, id, request.user.tenant_id]
+      [email || null, rolePayload ? JSON.stringify(rolePayload) : null, status || null, orgIds, wsIds, id, request.user.tenant_id]
     );
-    await auditLog(request, 'update', 'user', id, { email, role, status });
+    await auditLog(request, 'update', 'user', id, { email, role: rolePayload || role, status });
     return reply.send({ status: 'ok' });
   });
 
@@ -632,7 +700,9 @@ export const tenantRoutes = async (fastify) => {
     if (Number(id) === Number(request.user?.user_id)) {
       return reply.code(400).send({ error: 'Você não pode alterar o próprio status' });
     }
-    if (request.user.role === 'manager' && targetUser[0].role === 'admin') {
+    const actorRole = getRoleName(request.user?.role);
+    const targetRole = getRoleName(targetUser[0].role);
+    if (actorRole === 'manager' && targetRole === 'admin') {
       return reply.code(403).send({ error: 'Manager não pode alterar admin' });
     }
 
@@ -656,7 +726,9 @@ export const tenantRoutes = async (fastify) => {
     if (!targetUser || targetUser.length === 0) {
       return reply.code(404).send({ error: 'Usuário não encontrado' });
     }
-    if (request.user.role === 'manager' && targetUser[0].role === 'admin') {
+    const actorRole = getRoleName(request.user?.role);
+    const targetRole = getRoleName(targetUser[0].role);
+    if (actorRole === 'manager' && targetRole === 'admin') {
       return reply.code(403).send({ error: 'Manager não pode excluir admin' });
     }
     await queryDatabase(

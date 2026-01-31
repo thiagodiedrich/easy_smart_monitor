@@ -7,6 +7,7 @@ Suporta dois tipos de usuários: Frontend e Device (IoT).
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -42,6 +43,7 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
+    name = Column(String(150), nullable=True)
     email = Column(String(100), unique=True, index=True, nullable=True)
     hashed_password = Column(String(255), nullable=False)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
@@ -66,10 +68,9 @@ class User(Base):
     
     # Nível de acesso (RBAC)
     role = Column(
-        Enum(UserRole),
-        default=UserRole.VIEWER,
-        nullable=False,
-        index=True
+        JSONB,
+        default={"role": UserRole.VIEWER.value},
+        nullable=False
     )
     
     # Metadados

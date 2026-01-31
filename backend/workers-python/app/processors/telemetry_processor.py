@@ -152,7 +152,13 @@ class TelemetryProcessor:
         equip_uuid = item.get("equip_uuid")
         
         # Buscar equipamento existente
-        equipment = await Equipment.get_by_uuid(db, equip_uuid)
+        equipment = await Equipment.get_by_uuid_scoped(
+            db,
+            equip_uuid,
+            tenant_id,
+            organization_id,
+            workspace_id,
+        )
         
         if equipment:
             if equipment.tenant_id != tenant_id:
@@ -196,7 +202,13 @@ class TelemetryProcessor:
             raise ValueError("sensor_uuid não encontrado")
         
         # Buscar sensor existente
-        sensor = await Sensor.get_by_uuid(db, sensor_uuid)
+        sensor = await Sensor.get_by_uuid_scoped(
+            db,
+            sensor_uuid,
+            equipment.tenant_id,
+            equipment.organization_id,
+            equipment.workspace_id,
+        )
         
         if sensor:
             if sensor.equipment_id != equipment.id:
