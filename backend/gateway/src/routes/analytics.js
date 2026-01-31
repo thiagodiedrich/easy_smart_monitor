@@ -6,6 +6,45 @@
  */
 import { logger } from '../utils/logger.js';
 import { queryDatabase } from '../utils/database.js';
+import config from '../config.js';
+
+function resolveTenantScope(request, reply) {
+  const tenantId = request.user?.tenant_id || request.tenantContext?.tenantId || null;
+  const organizationId = request.user?.organization_id || request.tenantContext?.organizationId || null;
+  const workspaceId = request.user?.workspace_id || request.tenantContext?.workspaceId || null;
+
+  if (config.multiTenant.enabled && config.multiTenant.enforce && !tenantId) {
+    reply.code(401).send({
+      error: 'TENANT_REQUIRED',
+      message: 'Tenant não informado',
+    });
+    return null;
+  }
+
+  return { tenantId, organizationId, workspaceId };
+}
+
+function appendTenantFilters(scope, params, tableAlias = 'e') {
+  if (!scope) {
+    return '';
+  }
+
+  const clauses = [];
+  if (scope.tenantId) {
+    clauses.push(`${tableAlias}.tenant_id = $${params.length + 1}`);
+    params.push(scope.tenantId);
+  }
+  if (scope.organizationId) {
+    clauses.push(`${tableAlias}.organization_id = $${params.length + 1}`);
+    params.push(scope.organizationId);
+  }
+  if (scope.workspaceId) {
+    clauses.push(`${tableAlias}.workspace_id = $${params.length + 1}`);
+    params.push(scope.workspaceId);
+  }
+
+  return clauses.length ? ` AND ${clauses.join(' AND ')}` : '';
+}
 
 /**
  * GET /api/v1/analytics/equipment/:equipmentUuid/history
@@ -50,6 +89,11 @@ export async function getEquipmentHistory(request, reply) {
         message: 'start_date must be before end_date'
       });
     }
+
+    const scope = resolveTenantScope(request, reply);
+    if (!scope) {
+      return;
+    }
     
     // Escolher view baseada no período
     let viewName, timeColumn;
@@ -86,6 +130,7 @@ export async function getEquipmentHistory(request, reply) {
     `;
     
     const params = [equipmentUuid, startDate.toISOString(), endDate.toISOString()];
+    query += appendTenantFilters(scope, params, 'e');
     
     // Filtrar por tipo de sensor se especificado
     if (sensor_type) {
@@ -104,7 +149,10 @@ export async function getEquipmentHistory(request, reply) {
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       rows: result.length,
-      view: viewName
+      view: viewName,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      workspaceId: scope.workspaceId,
     });
     
     return reply.send({
@@ -161,6 +209,11 @@ export async function getSensorHistory(request, reply) {
         message: 'start_date must be before end_date'
       });
     }
+
+    const scope = resolveTenantScope(request, reply);
+    if (!scope) {
+      return;
+    }
     
     // Escolher view
     let viewName, timeColumn;
@@ -176,7 +229,7 @@ export async function getSensorHistory(request, reply) {
     }
     
     // Query otimizada
-    const query = `
+    let query = `
       SELECT 
         ${timeColumn} AS time,
         ${period === 'raw' 
@@ -185,22 +238,24 @@ export async function getSensorHistory(request, reply) {
         }
       FROM ${viewName} ${period === 'raw' ? 'td' : 'agg'}
       INNER JOIN sensors s ON ${period === 'raw' ? 'td.sensor_id' : 'agg.sensor_id'} = s.id
+      INNER JOIN equipments e ON ${period === 'raw' ? 'td.equipment_id' : 'agg.equipment_id'} = e.id
       WHERE s.uuid = $1
         AND ${timeColumn} >= $2
         AND ${timeColumn} <= $3
-      ORDER BY ${timeColumn} ASC
     `;
+    const params = [sensorUuid, startDate.toISOString(), endDate.toISOString()];
+    query += appendTenantFilters(scope, params, 'e');
+    query += ` ORDER BY ${timeColumn} ASC`;
     
-    const result = await queryDatabase(query, [
-      sensorUuid,
-      startDate.toISOString(),
-      endDate.toISOString()
-    ]);
+    const result = await queryDatabase(query, params);
     
     logger.info('Histórico de sensor consultado', {
       sensorUuid,
       period,
-      rows: result.length
+      rows: result.length,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      workspaceId: scope.workspaceId,
     });
     
     return reply.send({
@@ -270,6 +325,11 @@ export async function getEquipmentStats(request, reply) {
     }
     
     const startDate = new Date(now.getTime() - interval.days * 24 * 60 * 60 * 1000);
+
+    const scope = resolveTenantScope(request, reply);
+    if (!scope) {
+      return;
+    }
     
     // Query agregada por sensor
     let query = `
@@ -291,6 +351,7 @@ export async function getEquipmentStats(request, reply) {
     `;
     
     const params = [equipmentUuid, startDate.toISOString()];
+    query += appendTenantFilters(scope, params, 'e');
     
     if (sensor_type) {
       query += ` AND s.type = $${params.length + 1}`;
@@ -304,7 +365,10 @@ export async function getEquipmentStats(request, reply) {
     logger.info('Estatísticas de equipamento consultadas', {
       equipmentUuid,
       period,
-      sensors: result.length
+      sensors: result.length,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      workspaceId: scope.workspaceId,
     });
     
     return reply.send({
@@ -350,6 +414,11 @@ export async function getHomeAssistantData(request, reply) {
     }
     
     const startDate = new Date(Date.now() - hoursInt * 60 * 60 * 1000);
+
+    const scope = resolveTenantScope(request, reply);
+    if (!scope) {
+      return;
+    }
     
     // Query otimizada para Home Assistant
     // Retorna dados horários (balance entre granularidade e performance)
@@ -372,6 +441,7 @@ export async function getHomeAssistantData(request, reply) {
     `;
     
     const params = [equipmentUuid, startDate.toISOString()];
+    query += appendTenantFilters(scope, params, 'e');
     
     if (sensor_type) {
       query += ` AND s.type = $${params.length + 1}`;
@@ -398,7 +468,10 @@ export async function getHomeAssistantData(request, reply) {
     logger.info('Dados Home Assistant consultados', {
       equipmentUuid,
       hours: hoursInt,
-      rows: formatted.length
+      rows: formatted.length,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      workspaceId: scope.workspaceId,
     });
     
     return reply.send({

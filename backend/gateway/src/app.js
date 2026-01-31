@@ -91,6 +91,15 @@ const rateLimitConfig = {
   max: config.rateLimitPerMinute,
   timeWindow: '1 minute',
   nameSpace: 'easysmart-gateway',
+  keyGenerator: (request) => {
+    if (config.multiTenant.enabled) {
+      return (
+        request.headers?.[config.multiTenant.tenantHeader] ||
+        request.ip
+      );
+    }
+    return request.ip;
+  },
 };
 
 // Redis para rate limiting e shield

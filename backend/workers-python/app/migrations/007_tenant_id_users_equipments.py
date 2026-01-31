@@ -7,11 +7,12 @@ Fase 1 da evolução multi-tenant:
 - Backfill tenant_id usando o tenant padrão.
 - Cria índices e FKs sem forçar NOT NULL.
 """
+import os
 from sqlalchemy import text
 from app.core.database import AsyncSessionLocal
 
-DEFAULT_TENANT_SLUG = "legacy"
-DEFAULT_TENANT_NAME = "Legacy Tenant"
+DEFAULT_TENANT_SLUG = os.getenv("DEFAULT_TENANT_SLUG", "legacy")
+DEFAULT_TENANT_NAME = os.getenv("DEFAULT_TENANT_NAME", "Legacy Tenant")
 
 
 async def upgrade():
