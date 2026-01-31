@@ -120,13 +120,13 @@ Salve as regras.
 
 ## Passo 6: Rodar as migrações do banco (primeira vez)
 
-Na primeira instalação, crie as tabelas e a estrutura no TimescaleDB:
+Na primeira instalação, crie as tabelas e a estrutura no TimescaleDB (o script garante o banco antes de criar tabelas):
 
 1. **Terminal** do aaPanel (ou SSH):
 
 ```bash
 cd /www/wwwroot/easysmart-backend
-docker compose run --rm worker python run_migrations.py
+docker compose run --rm worker python run_migrations.py upgrade
 ```
 
 Use **`run --rm`** (e não `exec`): isso cria um container temporário, roda as migrações e remove o container. Funciona mesmo se o serviço `worker` estiver reiniciando ou parado.

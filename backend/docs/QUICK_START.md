@@ -55,6 +55,13 @@ curl -X POST http://localhost:8000/api/v1/telemetry/bulk \
 
 ### 5. Verificar Processamento
 
+### 6. Rodar migrations (primeira vez)
+
+```bash
+# O script garante o banco antes de criar tabelas
+docker-compose run --rm worker python run_migrations.py upgrade
+```
+
 ```bash
 # Logs do gateway (deve mostrar "Telemetria salva em storage")
 docker-compose logs -f gateway

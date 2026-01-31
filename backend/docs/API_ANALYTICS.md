@@ -1,10 +1,10 @@
-# API Analytics - Endpoints Otimizados v1.2.7
+# API Analytics - Endpoints Otimizados v1.2.8.1
 
 ## 🎯 Objetivo
 
 Endpoints centralizados para consultas analíticas otimizadas usando Continuous Aggregates do TimescaleDB.
 
-**Versão**: 1.2.7 Estável
+**Versão**: 1.2.8.1 Estável
 
 **Todas as regras de negócio centralizadas na API!** ✅
 
@@ -278,4 +278,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**API Analytics v1.2.7 pronta para uso!** 🚀
+**API Analytics v1.2.8.1 pronta para uso!** 🚀

@@ -410,6 +410,21 @@ export const tenantRoutes = async (fastify) => {
       workspace_id,
     } = request.body || {};
 
+    const targetUser = await queryDatabase(
+      `SELECT id, role FROM users WHERE id = $1 AND tenant_id = $2`,
+      [id, request.user.tenant_id]
+    );
+    if (!targetUser || targetUser.length === 0) {
+      return reply.code(404).send({ error: 'Usuário não encontrado' });
+    }
+    if (request.user.role === 'manager' && targetUser[0].role === 'admin') {
+      return reply.code(403).send({ error: 'Manager não pode alterar admin' });
+    }
+
+    if (status && !['active', 'inactive', 'blocked'].includes(status)) {
+      return reply.code(400).send({ error: 'status inválido. Use: active, inactive, blocked' });
+    }
+
     const orgIds = normalizeScopeArray(organization_id);
     const wsIds = normalizeScopeArray(workspace_id);
     const scopeCheck = await validateOrgWorkspace(request.user.tenant_id, orgIds, wsIds);
@@ -450,13 +465,58 @@ export const tenantRoutes = async (fastify) => {
     return reply.send({ status: 'ok' });
   });
 
-  fastify.delete('/users/:id', async (request, reply) => {
+  fastify.patch('/users/:id/status', async (request, reply) => {
     const { id } = request.params;
-    await queryDatabase(
-      `DELETE FROM users WHERE id = $1 AND tenant_id = $2`,
+    const { status } = request.body || {};
+    if (!status) {
+      return reply.code(400).send({ error: 'status é obrigatório' });
+    }
+    if (!['active', 'inactive', 'blocked'].includes(status)) {
+      return reply.code(400).send({ error: 'status inválido. Use: active, inactive, blocked' });
+    }
+
+    const targetUser = await queryDatabase(
+      `SELECT id, role FROM users WHERE id = $1 AND tenant_id = $2`,
       [id, request.user.tenant_id]
     );
-    await auditLog(request, 'delete', 'user', id, {});
+    if (!targetUser || targetUser.length === 0) {
+      return reply.code(404).send({ error: 'Usuário não encontrado' });
+    }
+    if (Number(id) === Number(request.user?.user_id)) {
+      return reply.code(400).send({ error: 'Você não pode alterar o próprio status' });
+    }
+    if (request.user.role === 'manager' && targetUser[0].role === 'admin') {
+      return reply.code(403).send({ error: 'Manager não pode alterar admin' });
+    }
+
+    await queryDatabase(
+      `UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
+      [status, id, request.user.tenant_id]
+    );
+    await auditLog(request, 'update_status', 'user', id, { status });
+    return reply.send({ status: 'ok' });
+  });
+
+  fastify.delete('/users/:id', async (request, reply) => {
+    const { id } = request.params;
+    if (Number(id) === Number(request.user?.user_id)) {
+      return reply.code(400).send({ error: 'Você não pode excluir o próprio usuário' });
+    }
+    const targetUser = await queryDatabase(
+      `SELECT id, role FROM users WHERE id = $1 AND tenant_id = $2`,
+      [id, request.user.tenant_id]
+    );
+    if (!targetUser || targetUser.length === 0) {
+      return reply.code(404).send({ error: 'Usuário não encontrado' });
+    }
+    if (request.user.role === 'manager' && targetUser[0].role === 'admin') {
+      return reply.code(403).send({ error: 'Manager não pode excluir admin' });
+    }
+    await queryDatabase(
+      `UPDATE users SET status = 'inactive', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+      [id, request.user.tenant_id]
+    );
+    await auditLog(request, 'soft_delete', 'user', id, { status: 'inactive' });
     return reply.send({ status: 'ok' });
   });
 };

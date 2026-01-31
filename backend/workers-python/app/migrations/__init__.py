@@ -1,5 +1,5 @@
 """
-Migrations para TimescaleDB (Backend v1.2.7).
+Migrations para TimescaleDB (Backend v1.2.8.1).
 
 Ordem de execução:
 1. 001_base_tables - Cria tabelas base (users, equipments, sensors, telemetry_data)

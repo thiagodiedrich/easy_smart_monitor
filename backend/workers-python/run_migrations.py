@@ -9,6 +9,8 @@ import asyncio
 import importlib
 import sys
 
+from ensure_database import ensure_database
+
 
 def _load_migration(module_name):
     """Carrega upgrade/downgrade de um módulo cujo nome começa com número (ex.: 002_...)."""
@@ -43,6 +45,12 @@ async def run_migrations(command):
     migrations = [(name, *_load_migration(name)) for name in migration_names]
     
     if command == "upgrade":
+        print("🛠️  Garantindo banco de dados...")
+        try:
+            await ensure_database()
+        except Exception as e:
+            print(f"❌ Erro ao garantir banco: {e}")
+            sys.exit(1)
         print("🚀 Aplicando migrations...")
         for name, upgrade_fn, _ in migrations:
             print(f"\n📦 Executando {name}...")

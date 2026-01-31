@@ -105,15 +105,23 @@ async def upgrade():
             """), {"tenant_id": default_tenant_id})
             await db.commit()
 
-            # 8. Backfill equipments.tenant_id a partir do usuário
-            await db.execute(text("""
-                UPDATE equipments e
-                SET tenant_id = u.tenant_id
-                FROM users u
-                WHERE e.user_id = u.id
-                  AND e.tenant_id IS NULL;
+            # 8. Backfill equipments.tenant_id a partir do usuário (se coluna existir)
+            result = await db.execute(text("""
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'equipments'
+                  AND column_name = 'user_id'
+                LIMIT 1;
             """))
-            await db.commit()
+            if result.first():
+                await db.execute(text("""
+                    UPDATE equipments e
+                    SET tenant_id = u.tenant_id
+                    FROM users u
+                    WHERE e.user_id = u.id
+                      AND e.tenant_id IS NULL;
+                """))
+                await db.commit()
 
             # 9. Backfill restante com tenant padrão (fallback)
             await db.execute(text("""

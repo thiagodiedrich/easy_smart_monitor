@@ -12,12 +12,18 @@ class Settings(BaseSettings):
     
     # Aplicação
     APP_NAME: str = Field(default="Easy Smart Monitor Workers", description="Nome da aplicação")
-    APP_VERSION: str = Field(default="1.2.7", description="Versão da aplicação")
+    APP_VERSION: str = Field(default="1.2.8.1", description="Versão da aplicação")
     DEBUG: bool = Field(default=False, description="Modo debug")
     
     # Banco de Dados
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://easysmart:password@localhost:5432/easysmart_db",
+        default=(
+            f"postgresql+asyncpg://{os.getenv('POSTGRES_USER', 'easysmart')}:"
+            f"{os.getenv('POSTGRES_PASSWORD', 'easysmart_password')}@"
+            f"{os.getenv('POSTGRES_HOST', 'localhost')}:"
+            f"{os.getenv('POSTGRES_PORT', '5432')}/"
+            f"{os.getenv('POSTGRES_DB', 'easysmart_db')}"
+        ),
         description="URL de conexão com PostgreSQL"
     )
     DATABASE_POOL_SIZE: int = Field(default=20, description="Tamanho do pool de conexões")

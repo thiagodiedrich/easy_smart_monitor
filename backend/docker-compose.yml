@@ -22,12 +22,12 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_BUCKET=telemetry-raw
       - STORAGE_TYPE=minio
-      - DATABASE_URL=postgresql://easysmart:${POSTGRES_PASSWORD:-easysmart_password}@postgres:5432/easysmart_db
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-easysmart}:${POSTGRES_PASSWORD:-easysmart_password}@postgres:5432/${POSTGRES_DB:-easysmart_db}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_USER=easysmart
+      - POSTGRES_USER=${POSTGRES_USER:-easysmart}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-easysmart_password}
-      - POSTGRES_DB=easysmart_db
+      - POSTGRES_DB=${POSTGRES_DB:-easysmart_db}
       - RATE_LIMIT_PER_MINUTE=1000
       - MAX_BULK_SIZE=10000
       - CORS_ORIGINS=http://localhost:3000,http://localhost:8080
@@ -62,7 +62,7 @@ services:
       - ./workers-python/app:/app/app
       - ./workers-python/run_migrations.py:/app/run_migrations.py
     environment:
-      - DATABASE_URL=postgresql+asyncpg://easysmart:${POSTGRES_PASSWORD:-easysmart_password}@postgres:5432/easysmart_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-easysmart}:${POSTGRES_PASSWORD:-easysmart_password}@postgres:5432/${POSTGRES_DB:-easysmart_db}
       - KAFKA_BROKERS=kafka:9092
       - KAFKA_TOPIC=telemetry.raw
       - KAFKA_GROUP_ID=telemetry-workers
@@ -96,7 +96,7 @@ services:
       - ./workers-python/app:/app/app
     command: ["python", "-m", "app.workers.alert_worker"]
     environment:
-      - DATABASE_URL=postgresql+asyncpg://easysmart:${POSTGRES_PASSWORD:-easysmart_password}@postgres:5432/easysmart_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-easysmart}:${POSTGRES_PASSWORD:-easysmart_password}@postgres:5432/${POSTGRES_DB:-easysmart_db}
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
       - ALERTS_ENABLED=${ALERTS_ENABLED:-false}
@@ -169,9 +169,9 @@ services:
     image: timescale/timescaledb:latest-pg15
     container_name: easysmart_postgres
     environment:
-      - POSTGRES_USER=easysmart
+      - POSTGRES_USER=${POSTGRES_USER:-easysmart}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-easysmart_password}
-      - POSTGRES_DB=easysmart_db
+      - POSTGRES_DB=${POSTGRES_DB:-easysmart_db}
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -181,7 +181,7 @@ services:
     networks:
       - easysmart_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U easysmart"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-easysmart}"]
       interval: 10s
       timeout: 5s
       retries: 5

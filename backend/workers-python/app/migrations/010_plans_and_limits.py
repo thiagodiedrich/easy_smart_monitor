@@ -63,9 +63,9 @@ async def upgrade():
             """), {
                 "code": DEFAULT_PLAN_CODE,
                 "name": DEFAULT_PLAN_NAME,
-                "items": _to_int(DEFAULT_PLAN_ITEMS_PER_DAY),
-                "sensors": _to_int(DEFAULT_PLAN_SENSORS_PER_DAY),
-                "bytes": _to_int(DEFAULT_PLAN_BYTES_PER_DAY),
+                "items": _to_int(DEFAULT_PLAN_ITEMS_PER_DAY) or 0,
+                "sensors": _to_int(DEFAULT_PLAN_SENSORS_PER_DAY) or 0,
+                "bytes": _to_int(DEFAULT_PLAN_BYTES_PER_DAY) or 0,
             })
             await db.commit()
 

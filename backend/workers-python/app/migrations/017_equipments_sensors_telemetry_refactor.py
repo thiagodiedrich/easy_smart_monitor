@@ -120,9 +120,9 @@ async def upgrade():
                 ALTER COLUMN status TYPE entity_status
                 USING
                     CASE
-                        WHEN lower(status) IN ('ativo','active') THEN 'active'::entity_status
-                        WHEN lower(status) IN ('inativo','inactive') THEN 'inactive'::entity_status
-                        WHEN lower(status) IN ('bloqueado','blocked') THEN 'blocked'::entity_status
+                        WHEN lower(status::text) IN ('ativo','active') THEN 'active'::entity_status
+                        WHEN lower(status::text) IN ('inativo','inactive') THEN 'inactive'::entity_status
+                        WHEN lower(status::text) IN ('bloqueado','blocked') THEN 'blocked'::entity_status
                         ELSE 'active'::entity_status
                     END;
             """))
@@ -174,9 +174,9 @@ async def upgrade():
                 ALTER COLUMN status TYPE entity_status
                 USING
                     CASE
-                        WHEN lower(status) IN ('ativo','active') THEN 'active'::entity_status
-                        WHEN lower(status) IN ('inativo','inactive') THEN 'inactive'::entity_status
-                        WHEN lower(status) IN ('bloqueado','blocked') THEN 'blocked'::entity_status
+                        WHEN lower(status::text) IN ('ativo','active') THEN 'active'::entity_status
+                        WHEN lower(status::text) IN ('inativo','inactive') THEN 'inactive'::entity_status
+                        WHEN lower(status::text) IN ('bloqueado','blocked') THEN 'blocked'::entity_status
                         ELSE 'active'::entity_status
                     END;
             """))

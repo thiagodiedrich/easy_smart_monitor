@@ -1,12 +1,12 @@
-# Easy Smart Monitor - Backend API v1.2.7
+# Easy Smart Monitor - Backend API v1.2.8.1
 
-**Versão estável:** 1.2.7
+**Versão estável:** 1.2.8.1
 
 API RESTful escalável para recebimento e processamento de dados de telemetria do Easy Smart Monitor.
 
-## 🎯 Versão 1.2.7 Estável
+## 🎯 Versão 1.2.8.1 Estável
 
-Esta é a versão estável do backend (código e documentação alinhados à v1.2.7), implementando:
+Esta é a versão estável do backend (código e documentação alinhados à v1.2.8.1), implementando:
 - ✅ **Claim Check Pattern** para payloads grandes
 - ✅ **TimescaleDB Continuous Aggregates** para consultas otimizadas
 - ✅ **Arquitetura distribuída** (Node.js Gateway + Kafka + Python Workers)
@@ -86,14 +86,14 @@ MinIO Console: `http://localhost:9001` (minioadmin/minioadmin)
 
 ### Configurar TimescaleDB
 
-Após iniciar os serviços, execute as migrations:
+Após iniciar os serviços, execute as migrations (o script agora garante o banco antes de criar tabelas):
 
 ```bash
 # Opção 1: container temporário (funciona mesmo se o worker estiver reiniciando)
-docker compose run --rm worker python run_migrations.py
+docker compose run --rm worker python run_migrations.py upgrade
 
 # Opção 2: dentro do container do worker (se estiver estável)
-docker compose exec worker python run_migrations.py
+docker compose exec worker python run_migrations.py upgrade
 ```
 
 ### Testar a API
@@ -177,7 +177,7 @@ backend/
 │   └── run_migrations.py   # Script de migrations
 │
 ├── docker-compose.yml       # Orquestração de serviços
-├── VERSION                  # Versão do backend (1.2.7)
+├── VERSION                  # Versão do backend (1.2.8.1)
 ├── README.md                # Este arquivo
 ├── docs/                    # Documentação detalhada
 │   ├── API_ANALYTICS.md
@@ -330,15 +330,13 @@ Proprietário - Datacase
 
 ## 📋 Histórico de Versões (Changelog)
 
-### [1.2.7] - 2024-01-15 - Versão Estável
+### [1.2.8.1] - 2024-02-09 - Hotfixes de Migração e Setup
 
 **Melhorias e Correções:**
-- ✅ **Multi-tenant SaaS**: tenant, organization e workspace
-- ✅ **Quotas e Billing**: planos, limites e uso diário
-- ✅ **Alertas e Webhooks**: thresholds 80/90/100 com cron configurável
-- ✅ **Admin Master**: bootstrap do usuário global (tenant_id=0)
-- ✅ **Observabilidade**: logs e métricas por tenant/escopo
-- ✅ **Documentação Atualizada**: docs organizadas em `backend/docs` e VERSION alinhado à v1.2.7
+- ✅ **Migrations mais resilientes** (007, 010, 017) em bases existentes
+- ✅ **Criação automática do banco** antes das migrations
+- ✅ **Compose/config** lendo `POSTGRES_*` do `.env`
+- ✅ **Documentação atualizada** para `run_migrations.py upgrade`
 
 **Funcionalidades Mantidas:**
 - Arquitetura Distribuída (Node.js Gateway + Kafka + Python Workers)
@@ -379,7 +377,7 @@ Para o changelog completo e detalhado, consulte: **CHANGELOG.md**
 - **docs/API_ANALYTICS.md**: Documentação detalhada dos endpoints de analytics
 - **docs/SECURITY.md**: Detalhes de segurança e Defense in Depth
 - **CHANGELOG.md**: Histórico completo e detalhado de versões
-- **VERSION**: Arquivo com a versão atual do backend (1.2.7)
+- **VERSION**: Arquivo com a versão atual do backend (1.2.8.1)
 
 ## 🆘 Suporte
 
@@ -391,4 +389,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**Backend v1.2.7 estável - Pronto para produção!** 🚀
+**Backend v1.2.8.1 estável - Pronto para produção!** 🚀
