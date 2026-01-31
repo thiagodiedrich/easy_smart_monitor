@@ -1,17 +1,21 @@
-# Easy Smart Monitor - Backend API v1.1.0
+# Easy Smart Monitor - Backend API v1.2.7
 
-**Versão estável:** 1.1.0
+**Versão estável:** 1.2.7
 
 API RESTful escalável para recebimento e processamento de dados de telemetria do Easy Smart Monitor.
 
-## 🎯 Versão 1.1.0 Estável
+## 🎯 Versão 1.2.7 Estável
 
-Esta é a versão estável do backend (código e documentação alinhados à v1.1.0), implementando:
+Esta é a versão estável do backend (código e documentação alinhados à v1.2.7), implementando:
 - ✅ **Claim Check Pattern** para payloads grandes
 - ✅ **TimescaleDB Continuous Aggregates** para consultas otimizadas
 - ✅ **Arquitetura distribuída** (Node.js Gateway + Kafka + Python Workers)
 - ✅ **Object Storage** (MinIO) para Data Lake
 - ✅ **Endpoints Analytics** otimizados para dashboards e Home Assistant
+- ✅ **Multi-tenant SaaS** (tenant, organization, workspace)
+- ✅ **Quotas e Billing** (planos, limites, uso diário)
+- ✅ **Alertas e Webhooks** (thresholds 80/90/100)
+- ✅ **Admin Master global** (tenant_id=0)
 
 ## 🏗️ Arquitetura
 
@@ -166,20 +170,24 @@ backend/
 │   │   ├── processors/     # Processadores de telemetria
 │   │   ├── storage/        # Cliente Storage (download)
 │   │   ├── models/         # Modelos SQLAlchemy
-│   │   ├── migrations/     # Migrations TimescaleDB (001 a 005)
+│   │   ├── migrations/     # Migrations TimescaleDB (001 a 015)
 │   │   └── core/           # Configurações
 │   ├── requirements.txt
 │   ├── Dockerfile
 │   └── run_migrations.py   # Script de migrations
 │
 ├── docker-compose.yml       # Orquestração de serviços
-├── VERSION                  # Versão do backend (1.1.0)
+├── VERSION                  # Versão do backend (1.2.7)
 ├── README.md                # Este arquivo
-├── ARCHITECTURE.md          # Detalhes da arquitetura
-├── DEPLOYMENT.md            # Guia de deploy
-├── INSTALACAO_AAPANEL.md    # Instalação no aaPanel
-├── TIMESCALEDB_SETUP.md     # Setup TimescaleDB
-├── API_ANALYTICS.md         # Documentação endpoints analytics
+├── docs/                    # Documentação detalhada
+│   ├── API_ANALYTICS.md
+│   ├── ARCHITECTURE.md
+│   ├── DEPLOYMENT.md
+│   ├── FASES_1_2.md
+│   ├── INSTALACAO_AAPANEL.md
+│   ├── SECURITY.md
+│   ├── TIMESCALEDB_SETUP.md
+│   └── ...
 └── CHANGELOG.md             # Histórico de versões
 ```
 
@@ -200,8 +208,9 @@ A documentação Swagger permite:
 ### Documentação Completa
 
 Para documentação detalhada dos endpoints, consulte:
-- **API_ANALYTICS.md**: Endpoints de analytics otimizados
-- **SECURITY.md**: Detalhes de segurança e autenticação
+- **docs/API_ANALYTICS.md**: Endpoints de analytics otimizados
+- **docs/SECURITY.md**: Detalhes de segurança e autenticação
+- **docs/FASES_1_2.md**: Fases da evolução multi-tenant (1.2.x)
 
 ## 🔐 Autenticação
 
@@ -321,21 +330,15 @@ Proprietário - Datacase
 
 ## 📋 Histórico de Versões (Changelog)
 
-### [1.1.0] - 2024-01-15 - Versão Estável
+### [1.2.7] - 2024-01-15 - Versão Estável
 
 **Melhorias e Correções:**
-- ✅ **Segurança Aprimorada**: Defense in Depth implementado
-  - Autenticação separada para dispositivos e frontend
-  - Gerenciamento de status de usuários (Ativo, Inativo, Bloqueado, Temporariamente Bloqueado)
-  - Migration **005_user_security_fields**: campos UserType, UserStatus, tentativas de login, bloqueio temporário
-  - Penalty Box com backoff exponencial
-  - Prevenção de uploads concorrentes
-  - Blacklist em Redis
-  - Logging estruturado para Fail2Ban
-- ✅ **Swagger/OpenAPI**: Documentação interativa adicionada em `/api/v1/docs`
-- ✅ **Limpeza de Código**: Remoção de imports não utilizados
-- ✅ **Correção Docker Compose**: Volumes duplicados e incorretos corrigidos
-- ✅ **Documentação Atualizada**: Todos os arquivos .md e VERSION alinhados à v1.1.0
+- ✅ **Multi-tenant SaaS**: tenant, organization e workspace
+- ✅ **Quotas e Billing**: planos, limites e uso diário
+- ✅ **Alertas e Webhooks**: thresholds 80/90/100 com cron configurável
+- ✅ **Admin Master**: bootstrap do usuário global (tenant_id=0)
+- ✅ **Observabilidade**: logs e métricas por tenant/escopo
+- ✅ **Documentação Atualizada**: docs organizadas em `backend/docs` e VERSION alinhado à v1.2.7
 
 **Funcionalidades Mantidas:**
 - Arquitetura Distribuída (Node.js Gateway + Kafka + Python Workers)
@@ -368,23 +371,24 @@ Para o changelog completo e detalhado, consulte: **CHANGELOG.md**
 ## 📚 Documentação Adicional
 
 - **Swagger/OpenAPI**: `http://localhost:8000/api/v1/docs` (Documentação interativa)
-- **ARCHITECTURE.md**: Detalhes técnicos da arquitetura
-- **DEPLOYMENT.md**: Guia completo de deploy e configuração
-- **INSTALACAO_AAPANEL.md**: Instalação e configuração no aaPanel
-- **TIMESCALEDB_SETUP.md**: Setup e configuração do TimescaleDB
-- **API_ANALYTICS.md**: Documentação detalhada dos endpoints de analytics
-- **SECURITY.md**: Detalhes de segurança e Defense in Depth
+- **docs/ARCHITECTURE.md**: Detalhes técnicos da arquitetura
+- **docs/DEPLOYMENT.md**: Guia completo de deploy e configuração
+- **docs/FASES_1_2.md**: Histórico de fases 1.2.0 → 1.2.7
+- **docs/INSTALACAO_AAPANEL.md**: Instalação e configuração no aaPanel
+- **docs/TIMESCALEDB_SETUP.md**: Setup e configuração do TimescaleDB
+- **docs/API_ANALYTICS.md**: Documentação detalhada dos endpoints de analytics
+- **docs/SECURITY.md**: Detalhes de segurança e Defense in Depth
 - **CHANGELOG.md**: Histórico completo e detalhado de versões
-- **VERSION**: Arquivo com a versão atual do backend (1.1.0)
+- **VERSION**: Arquivo com a versão atual do backend (1.2.7)
 
 ## 🆘 Suporte
 
 Para problemas ou dúvidas:
 - Verificar logs: `docker-compose logs`
-- Consultar documentação: Arquivos `.md` na pasta `backend/`
+- Consultar documentação: Arquivos `.md` na pasta `backend/docs`
 - Health checks: `/api/v1/health/detailed`
 - MinIO Console: `http://localhost:9001`
 
 ---
 
-**Backend v1.1.0 estável - Pronto para produção!** 🚀
+**Backend v1.2.7 estável - Pronto para produção!** 🚀

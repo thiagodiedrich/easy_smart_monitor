@@ -5,10 +5,11 @@ Representa um sensor individual dentro de um equipamento.
 """
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+import enum
 
 from app.core.database import Base
 
@@ -23,8 +24,20 @@ class Sensor(Base):
     name = Column(String(200), nullable=False)
     type = Column(String(50), nullable=False)
     unit = Column(String(20), nullable=True)
-    status = Column(String(20), default="ATIVO", nullable=False)
+    class Status(str, enum.Enum):
+        ACTIVE = "active"
+        INACTIVE = "inactive"
+        BLOCKED = "blocked"
+
+    status = Column(
+        Enum(Status, name="entity_status"),
+        default=Status.ACTIVE,
+        nullable=False
+    )
     equipment_id = Column(Integer, ForeignKey("equipments.id"), nullable=False)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False, index=True)
     
     manufacturer = Column(String(100), nullable=True)
     model = Column(String(100), nullable=True)

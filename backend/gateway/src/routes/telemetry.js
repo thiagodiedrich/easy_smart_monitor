@@ -47,6 +47,20 @@ function estimatePayloadBytes(data) {
   }
 }
 
+function resolveScopeValue(headerValue, claimValue) {
+  if (headerValue !== undefined && headerValue !== null && headerValue !== '') {
+    const parsed = parseInt(headerValue, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  if (Array.isArray(claimValue)) {
+    if (claimValue.includes(0)) {
+      return 0;
+    }
+    return claimValue[0];
+  }
+  return claimValue ?? 0;
+}
+
 export const telemetryRoutes = async (fastify) => {
   // Middleware de autenticação (apenas devices podem enviar telemetria)
   fastify.addHook('onRequest', async (request, reply) => {
@@ -141,8 +155,14 @@ export const telemetryRoutes = async (fastify) => {
     const userId = request.user.sub; // Do JWT
     const requestId = request.id;
     const tenantId = request.user.tenant_id || request.tenantContext?.tenantId;
-    const organizationId = request.user.organization_id || request.tenantContext?.organizationId;
-    const workspaceId = request.user.workspace_id || request.tenantContext?.workspaceId;
+    const organizationId = resolveScopeValue(
+      request.headers?.[config.multiTenant.organizationHeader],
+      request.user.organization_id || request.tenantContext?.organizationId
+    );
+    const workspaceId = resolveScopeValue(
+      request.headers?.[config.multiTenant.workspaceHeader],
+      request.user.workspace_id || request.tenantContext?.workspaceId
+    );
     const totalSensors = data.reduce((sum, item) => sum + (item.sensor?.length || 0), 0);
     
     // Validação básica
@@ -157,6 +177,22 @@ export const telemetryRoutes = async (fastify) => {
     if (data.length > maxSize) {
       return reply.code(400).send({
         error: `Lote muito grande. Máximo: ${maxSize} itens`,
+      });
+    }
+
+    if (!tenantId) {
+      return reply.code(400).send({
+        error: 'tenant_id obrigatório para telemetria',
+      });
+    }
+    if (!organizationId) {
+      return reply.code(400).send({
+        error: 'organization_id obrigatório para telemetria',
+      });
+    }
+    if (!workspaceId) {
+      return reply.code(400).send({
+        error: 'workspace_id obrigatório para telemetria',
       });
     }
 

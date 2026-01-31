@@ -9,7 +9,9 @@
  */
 import { logger } from '../utils/logger.js';
 import { validateUserCredentials, UserType } from '../utils/auth.js';
+import { queryDatabase } from '../utils/database.js';
 import config from '../config.js';
+import bcrypt from 'bcrypt';
 
 /**
  * Obtém IP real do cliente
@@ -19,6 +21,19 @@ function getRealIP(request) {
          request.headers['x-real-ip'] ||
          request.ip ||
          request.socket.remoteAddress;
+}
+
+async function saveRefreshToken(userId, refreshToken, expiresAt) {
+  const hash = await bcrypt.hash(refreshToken, 10);
+  await queryDatabase(
+    `
+      UPDATE users
+      SET refresh_token_hash = $1,
+          refresh_token_expires_at = $2
+      WHERE id = $3
+    `,
+    [hash, expiresAt, userId]
+  );
 }
 
 export const authRoutes = async (fastify) => {
@@ -88,6 +103,7 @@ export const authRoutes = async (fastify) => {
         tenant_id: user.tenant_id,
         organization_id: user.organization_id,
         workspace_id: user.workspace_id,
+        role: user.role,
         user_type: UserType.FRONTEND,
         type: 'access' 
       },
@@ -101,11 +117,14 @@ export const authRoutes = async (fastify) => {
         tenant_id: user.tenant_id,
         organization_id: user.organization_id,
         workspace_id: user.workspace_id,
+        role: user.role,
         user_type: UserType.FRONTEND,
         type: 'refresh' 
       },
       { expiresIn: '7d' }
     );
+
+    await saveRefreshToken(user.id, refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     
     logger.info('Login frontend realizado com sucesso', { 
       username,
@@ -188,6 +207,7 @@ export const authRoutes = async (fastify) => {
         tenant_id: user.tenant_id,
         organization_id: user.organization_id,
         workspace_id: user.workspace_id,
+        role: user.role,
         user_type: UserType.DEVICE,
         device_id: device_id || 'unknown',
         type: 'access' 
@@ -202,12 +222,15 @@ export const authRoutes = async (fastify) => {
         tenant_id: user.tenant_id,
         organization_id: user.organization_id,
         workspace_id: user.workspace_id,
+        role: user.role,
         user_type: UserType.DEVICE,
         device_id: device_id || 'unknown',
         type: 'refresh' 
       },
       { expiresIn: '30d' } // Refresh token mais longo para dispositivos
     );
+
+    await saveRefreshToken(user.id, refreshToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
     
     logger.info('Login device realizado com sucesso', { 
       username,
@@ -263,15 +286,51 @@ export const authRoutes = async (fastify) => {
           message: 'Token não é do tipo refresh' 
         });
       }
+
+      const userRows = await queryDatabase(
+        `
+          SELECT id, tenant_id, organization_id, workspace_id, role, refresh_token_hash, refresh_token_expires_at
+          FROM users
+          WHERE id = $1
+        `,
+        [decoded.user_id]
+      );
+      if (!userRows || userRows.length === 0) {
+        return reply.code(401).send({
+          error: 'INVALID_TOKEN',
+          message: 'Usuário não encontrado'
+        });
+      }
+      const user = userRows[0];
+      if (user.refresh_token_hash) {
+        if (user.refresh_token_expires_at && new Date(user.refresh_token_expires_at) < new Date()) {
+          return reply.code(401).send({
+            error: 'INVALID_TOKEN',
+            message: 'Refresh token expirado'
+          });
+        }
+        const validRefresh = await bcrypt.compare(token, user.refresh_token_hash);
+        if (!validRefresh) {
+          return reply.code(401).send({
+            error: 'INVALID_TOKEN',
+            message: 'Refresh token inválido'
+          });
+        }
+      } else {
+        logger.warn('Refresh token sem hash registrado (migração pendente)', {
+          user_id: decoded.user_id
+        });
+      }
       
       // Gerar novo access token (preservar user_type)
       const accessToken = fastify.jwt.sign(
         { 
           sub: decoded.sub,
           user_id: decoded.user_id,
-          tenant_id: decoded.tenant_id,
-          organization_id: decoded.organization_id,
-          workspace_id: decoded.workspace_id,
+          tenant_id: user.tenant_id,
+          organization_id: user.organization_id,
+          workspace_id: user.workspace_id,
+          role: user.role,
           user_type: decoded.user_type,
           device_id: decoded.device_id,
           type: 'access' 
@@ -318,6 +377,7 @@ export const authRoutes = async (fastify) => {
         tenant_id: request.user.tenant_id,
         organization_id: request.user.organization_id,
         workspace_id: request.user.workspace_id,
+        role: request.user.role,
         user_type: request.user.user_type,
         device_id: request.user.device_id,
       };

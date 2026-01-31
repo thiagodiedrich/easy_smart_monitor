@@ -1,7 +1,103 @@
 # Changelog - Easy Smart Monitor Backend
 
 Todas as mudanças notáveis do backend estão documentadas neste arquivo.  
-**Versão estável atual:** 1.1.0
+**Versão estável atual:** 1.2.7
+
+---
+
+## [1.2.7] - 2024-02-08 - SaaS Multi-Tenant (Fase 7)
+
+### ✨ Entregas
+- ✅ Alertas globais e por tenant/org/workspace (80/90/100)
+- ✅ Webhooks com escopo global e por tenant
+- ✅ Worker de alertas + cron configurável
+- ✅ Uso diário por org/workspace (tabela scoped)
+- ✅ Atraso de alertas por plano/tenant
+
+### 📝 Migrations (1.2.7)
+- **013_tenant_usage_daily_scoped**: uso diário por org/workspace
+- **014_alerting_tables**: regras, alertas, webhooks e delivery
+- **015_alert_delay_seconds**: atraso por plano/tenant
+
+### 📚 Documentação
+- **docs/FASES_1_2.md**: resumo completo das fases 1.2.x
+
+---
+
+## [1.2.6] - 2024-02-07 - SaaS Multi-Tenant (Fase 6)
+
+### ✨ Entregas
+- ✅ Bootstrap de usuário master (tenant_id=0)
+- ✅ Suporte a organization_id/workspace_id em users
+- ✅ Admin global com escopo total (tenant_id=0)
+
+### 📝 Migrations (1.2.6)
+- **012_org_workspace_in_users**: org/workspace em users
+
+---
+
+## [1.2.5] - 2024-02-06 - SaaS Multi-Tenant (Fase 5)
+
+### ✨ Entregas
+- ✅ Planos e limites por tenant
+- ✅ Enforcement de quotas na ingestão
+- ✅ Preparação para billing real
+
+### 📝 Migrations (1.2.5)
+- **010_plans_and_limits**: planos e limites por tenant
+
+---
+
+## [1.2.4] - 2024-02-05 - SaaS Multi-Tenant (Fase 4)
+
+### ✨ Entregas
+- ✅ Uso diário por tenant (billing-ready)
+- ✅ Metadados de ingestão (itens/sensores/bytes)
+
+### 📝 Migrations (1.2.4)
+- **009_tenant_usage_daily**: uso diário por tenant
+
+---
+
+## [1.2.3] - 2024-02-04 - SaaS Multi-Tenant (Fase 3)
+
+### ✨ Entregas
+- ✅ Isolamento por tenant/org/workspace em analytics
+- ✅ Rate limit por tenant
+
+---
+
+## [1.2.2] - 2024-02-03 - SaaS Multi-Tenant (Fase 2)
+
+### ✨ Entregas
+- ✅ organization_id e workspace_id em equipments
+- ✅ Propagação de contexto na ingestão (Kafka)
+
+### 📝 Migrations (1.2.2)
+- **008_org_workspace_in_equipments**: org/workspace em equipments
+
+---
+
+## [1.2.1] - 2024-02-02 - SaaS Multi-Tenant (Fase 1)
+
+### ✨ Entregas
+- ✅ tenant_id em users/equipments
+- ✅ JWT com tenant_id
+- ✅ Backfill para tenant legado
+
+### 📝 Migrations (1.2.1)
+- **007_tenant_id_users_equipments**: tenant_id em users/equipments
+
+---
+
+## [1.2.0] - 2024-02-01 - SaaS Multi-Tenant (Fase 0)
+
+### ✨ Entregas
+- ✅ Tabelas SaaS base (tenants, organizations, workspaces)
+- ✅ Contexto multi-tenant opcional (Gateway/Workers)
+
+### 📝 Migrations (1.2.0)
+- **006_tenant_organization_workspace**: base multi-tenant
 
 ---
 

@@ -162,10 +162,9 @@ class TelemetryKafkaConsumer:
                     # Processar telemetria
                     async with AsyncSessionLocal() as db:
                         result = await self.processor.process_bulk(
-                            int(user_id) if user_id.isdigit() else 1,
-                            int(tenant_id) if tenant_id and str(tenant_id).isdigit() else None,
-                            int(organization_id) if organization_id and str(organization_id).isdigit() else None,
-                            int(workspace_id) if workspace_id and str(workspace_id).isdigit() else None,
+                            int(tenant_id) if tenant_id and str(tenant_id).isdigit() else 0,
+                            int(organization_id) if organization_id and str(organization_id).isdigit() else 0,
+                            int(workspace_id) if workspace_id and str(workspace_id).isdigit() else 0,
                             telemetry_data,
                             db,
                         )
@@ -174,6 +173,8 @@ class TelemetryKafkaConsumer:
                             await self._record_usage(
                                 db,
                                 int(tenant_id),
+                                int(organization_id) if organization_id and str(organization_id).isdigit() else 0,
+                                int(workspace_id) if workspace_id and str(workspace_id).isdigit() else 0,
                                 int(items_count) if str(items_count).isdigit() else 0,
                                 int(sensors_count) if str(sensors_count).isdigit() else 0,
                                 int(bytes_ingested) if str(bytes_ingested).isdigit() else 0,
@@ -229,6 +230,8 @@ class TelemetryKafkaConsumer:
         self,
         db: AsyncSessionLocal,
         tenant_id: int,
+        organization_id: int,
+        workspace_id: int,
         items_count: int,
         sensors_count: int,
         bytes_ingested: int,
@@ -239,6 +242,7 @@ class TelemetryKafkaConsumer:
         if items_count == 0 and sensors_count == 0 and bytes_ingested == 0:
             return
 
+        # Global por tenant
         await db.execute(
             text("""
                 INSERT INTO tenant_usage_daily (
@@ -258,6 +262,36 @@ class TelemetryKafkaConsumer:
             """),
             {
                 "tenant_id": tenant_id,
+                "items": items_count,
+                "sensors": sensors_count,
+                "bytes": bytes_ingested,
+            },
+        )
+
+        # Por organização/workspace
+        await db.execute(
+            text("""
+                INSERT INTO tenant_usage_daily_scoped (
+                    tenant_id,
+                    organization_id,
+                    workspace_id,
+                    day,
+                    items_count,
+                    sensors_count,
+                    bytes_ingested
+                )
+                VALUES (:tenant_id, :org_id, :ws_id, CURRENT_DATE, :items, :sensors, :bytes)
+                ON CONFLICT (tenant_id, organization_id, workspace_id, day) DO UPDATE
+                SET
+                    items_count = tenant_usage_daily_scoped.items_count + EXCLUDED.items_count,
+                    sensors_count = tenant_usage_daily_scoped.sensors_count + EXCLUDED.sensors_count,
+                    bytes_ingested = tenant_usage_daily_scoped.bytes_ingested + EXCLUDED.bytes_ingested,
+                    updated_at = NOW();
+            """),
+            {
+                "tenant_id": tenant_id,
+                "org_id": organization_id or 0,
+                "ws_id": workspace_id or 0,
                 "items": items_count,
                 "sensors": sensors_count,
                 "bytes": bytes_ingested,

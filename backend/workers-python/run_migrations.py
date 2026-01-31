@@ -31,6 +31,13 @@ async def run_migrations(command):
         "010_plans_and_limits",
         "011_tenant_billing_events",
         "012_org_workspace_in_users",
+        "013_tenant_usage_daily_scoped",
+        "014_alerting_tables",
+        "015_alert_delay_seconds",
+        "016_users_refactor",
+        "017_equipments_sensors_telemetry_refactor",
+        "018_plans_limits_refactor",
+        "019_continuous_aggregates_scoped",
     ]
     migrations = [(name, *_load_migration(name)) for name in migration_names]
     

@@ -38,12 +38,30 @@ function appendTenantFilters(scope, params, tableAlias = 'e') {
     params.push(scope.tenantId);
   }
   if (scope.organizationId) {
-    clauses.push(`${tableAlias}.organization_id = $${params.length + 1}`);
-    params.push(scope.organizationId);
+    if (Array.isArray(scope.organizationId)) {
+      if (!scope.organizationId.includes(0)) {
+        clauses.push(`${tableAlias}.organization_id = ANY($${params.length + 1})`);
+        params.push(scope.organizationId);
+      }
+    } else {
+      if (Number(scope.organizationId) !== 0) {
+        clauses.push(`${tableAlias}.organization_id = $${params.length + 1}`);
+        params.push(scope.organizationId);
+      }
+    }
   }
   if (scope.workspaceId) {
-    clauses.push(`${tableAlias}.workspace_id = $${params.length + 1}`);
-    params.push(scope.workspaceId);
+    if (Array.isArray(scope.workspaceId)) {
+      if (!scope.workspaceId.includes(0)) {
+        clauses.push(`${tableAlias}.workspace_id = ANY($${params.length + 1})`);
+        params.push(scope.workspaceId);
+      }
+    } else {
+      if (Number(scope.workspaceId) !== 0) {
+        clauses.push(`${tableAlias}.workspace_id = $${params.length + 1}`);
+        params.push(scope.workspaceId);
+      }
+    }
   }
 
   return clauses.length ? ` AND ${clauses.join(' AND ')}` : '';

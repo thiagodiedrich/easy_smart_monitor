@@ -6,9 +6,10 @@ Suporta dois tipos de usuários: Frontend e Device (IoT).
 """
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.dialects.postgresql import ARRAY
 import enum
 
 from app.core.database import Base
@@ -27,6 +28,13 @@ class UserType(str, enum.Enum):
     DEVICE = "device"      # Usuário para dispositivos IoT
 
 
+class UserRole(str, enum.Enum):
+    """Nível de acesso do usuário."""
+    ADMIN = "admin"
+    MANAGER = "manager"
+    VIEWER = "viewer"
+
+
 class User(Base):
     """Modelo de usuário para autenticação."""
     
@@ -36,9 +44,9 @@ class User(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=True)
     hashed_password = Column(String(255), nullable=False)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
-    organization_id = Column(Integer, nullable=True, index=True)
-    workspace_id = Column(Integer, nullable=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    organization_id = Column(ARRAY(Integer), nullable=False, index=True, default=[0])
+    workspace_id = Column(ARRAY(Integer), nullable=False, index=True, default=[0])
     
     # Tipo de usuário (frontend ou device)
     user_type = Column(
@@ -56,15 +64,21 @@ class User(Base):
         index=True
     )
     
-    # Campos legados (manter para compatibilidade)
-    is_active = Column(Boolean, default=True, nullable=False)
-    is_superuser = Column(Boolean, default=False, nullable=False)
+    # Nível de acesso (RBAC)
+    role = Column(
+        Enum(UserRole),
+        default=UserRole.VIEWER,
+        nullable=False,
+        index=True
+    )
     
     # Metadados
     last_login_at = Column(DateTime, nullable=True)
     last_login_ip = Column(String(45), nullable=True)  # IPv6 suporta até 45 chars
     failed_login_attempts = Column(Integer, default=0, nullable=False)
     locked_until = Column(DateTime, nullable=True)
+    refresh_token_hash = Column(String(255), nullable=True)
+    refresh_token_expires_at = Column(DateTime, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

@@ -22,6 +22,9 @@ class TelemetryData(Base):
     id = Column(Integer, primary_key=True, index=True)
     sensor_id = Column(Integer, ForeignKey("sensors.id"), nullable=False, index=True)
     equipment_id = Column(Integer, ForeignKey("equipments.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False, index=True)
     
     value = Column(Float, nullable=True)
     status = Column(String(50), nullable=True)

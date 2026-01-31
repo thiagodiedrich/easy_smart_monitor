@@ -1,4 +1,4 @@
-# Guia de Deploy - Easy Smart Monitor Backend v1.1.0
+# Guia de Deploy - Easy Smart Monitor Backend v1.2.7
 
 ## 🚀 Deploy com Docker Compose
 
@@ -415,4 +415,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**Backend v1.1.0 pronto para produção com Claim Check Pattern e Continuous Aggregates!** 🚀
+**Backend v1.2.7 pronto para produção com Claim Check Pattern e Continuous Aggregates!** 🚀

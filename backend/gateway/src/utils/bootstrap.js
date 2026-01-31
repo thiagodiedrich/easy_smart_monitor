@@ -68,14 +68,13 @@ export async function bootstrapMasterAdmin() {
         hashed_password,
         user_type,
         status,
-        is_active,
-        is_superuser,
         tenant_id,
         organization_id,
-        workspace_id
-      ) VALUES ($1, $2, $3, 'frontend', 'active', true, true, $4, $5, $6)
+        workspace_id,
+        role
+      ) VALUES ($1, $2, $3, 'frontend', 'active', $4, $5, $6, 'admin')
     `,
-    [username, email, hashedPassword, tenantId, organizationId, workspaceId]
+    [username, email, hashedPassword, tenantId, [organizationId], [workspaceId]]
   );
 
   logger.info('Usuário master criado com sucesso', {

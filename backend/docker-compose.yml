@@ -87,6 +87,28 @@ services:
     deploy:
       replicas: 2  # Múltiplos workers para paralelismo
 
+  # Alert Worker (Alertas + Webhooks)
+  alert-worker:
+    build:
+      context: ./workers-python
+      dockerfile: Dockerfile
+    volumes:
+      - ./workers-python/app:/app/app
+    command: ["python", "-m", "app.workers.alert_worker"]
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://easysmart:${POSTGRES_PASSWORD:-easysmart_password}@postgres:5432/easysmart_db
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - ALERTS_ENABLED=${ALERTS_ENABLED:-false}
+      - WEBHOOKS_ENABLED=${WEBHOOKS_ENABLED:-false}
+      - ALERT_POLL_SECONDS=${ALERT_POLL_SECONDS:-60}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - easysmart_network
+
   # Kafka
   kafka:
     image: confluentinc/cp-kafka:7.5.0

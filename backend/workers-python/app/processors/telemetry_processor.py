@@ -21,10 +21,9 @@ class TelemetryProcessor:
     
     async def process_bulk(
         self,
-        user_id: int,
-        tenant_id: Optional[int],
-        organization_id: Optional[int],
-        workspace_id: Optional[int],
+        tenant_id: int,
+        organization_id: int,
+        workspace_id: int,
         telemetry_data: List[Dict[str, Any]],
         db: AsyncSession,
     ) -> Dict[str, Any]:
@@ -32,7 +31,7 @@ class TelemetryProcessor:
         Processa um lote de dados de telemetria.
         
         Args:
-            user_id: ID do usuário proprietário
+            tenant_id: ID do tenant
             telemetry_data: Lista de dados de telemetria (formato do cliente)
             db: Sessão do banco de dados
             
@@ -42,6 +41,13 @@ class TelemetryProcessor:
         processed = 0
         inserted = 0
         errors: List[str] = []
+
+        if not tenant_id:
+            raise ValueError("tenant_id é obrigatório para telemetria")
+        if not organization_id:
+            raise ValueError("organization_id é obrigatório para telemetria")
+        if not workspace_id:
+            raise ValueError("workspace_id é obrigatório para telemetria")
         
         # Agrupar por equipamento para otimizar
         equipment_map: Dict[str, Dict[str, Any]] = {}
@@ -65,7 +71,6 @@ class TelemetryProcessor:
                 equipment = equipment_map[equip_uuid]["equipment"]
                 if equipment is None:
                     equipment = await self._get_or_create_equipment(
-                        user_id,
                         tenant_id,
                         organization_id,
                         workspace_id,
@@ -86,7 +91,7 @@ class TelemetryProcessor:
                     
                     if sensor_uuid not in equipment_map[equip_uuid]["sensors"]:
                         sensor = await self._get_or_create_sensor(
-                            equipment.id,
+                            equipment,
                             sensor_data,
                             item,  # Passar item completo para pegar tipo se necessário
                             db,
@@ -98,7 +103,7 @@ class TelemetryProcessor:
                     # Preparar dados de telemetria
                     telemetry_item = self._prepare_telemetry_data(
                         sensor.id,
-                        equipment.id,
+                        equipment,
                         sensor_data,
                     )
                     equipment_map[equip_uuid]["telemetry_data"].append(telemetry_item)
@@ -137,10 +142,9 @@ class TelemetryProcessor:
     
     async def _get_or_create_equipment(
         self,
-        user_id: int,
-        tenant_id: Optional[int],
-        organization_id: Optional[int],
-        workspace_id: Optional[int],
+        tenant_id: int,
+        organization_id: int,
+        workspace_id: int,
         item: Dict[str, Any],
         db: AsyncSession,
     ) -> Equipment:
@@ -151,31 +155,22 @@ class TelemetryProcessor:
         equipment = await Equipment.get_by_uuid(db, equip_uuid)
         
         if equipment:
-            if equipment.user_id != user_id:
-                raise ValueError(f"Equipamento {equip_uuid} não pertence ao usuário")
-            if tenant_id and equipment.tenant_id and equipment.tenant_id != tenant_id:
+            if equipment.tenant_id != tenant_id:
                 raise ValueError(f"Equipamento {equip_uuid} não pertence ao tenant")
-            if tenant_id and equipment.tenant_id is None:
-                equipment.tenant_id = tenant_id
-            if organization_id and equipment.organization_id is None:
-                equipment.organization_id = organization_id
-            if workspace_id and equipment.workspace_id is None:
-                equipment.workspace_id = workspace_id
-            if tenant_id or organization_id or workspace_id:
-                db.add(equipment)
-                await db.flush()
+            if equipment.organization_id != organization_id:
+                raise ValueError(f"Equipamento {equip_uuid} não pertence à organização")
+            if equipment.workspace_id != workspace_id:
+                raise ValueError(f"Equipamento {equip_uuid} não pertence ao workspace")
             return equipment
         
         # Criar novo equipamento
         equipment = Equipment(
             uuid=equip_uuid,
             name=item.get("equip_nome", f"Equipamento {equip_uuid[:8]}"),
-            location=item.get("equip_local"),
-            status=item.get("equip_status", "ATIVO"),
+            status=self._normalize_status(item.get("equip_status")),
             collection_interval=item.get("equip_intervalo_coleta", 60),
             siren_active=item.get("equip_sirene_ativa", "NÃO") == "SIM",
             siren_time=item.get("equip_sirete_tempo", 120),
-            user_id=user_id,
             tenant_id=tenant_id,
             organization_id=organization_id,
             workspace_id=workspace_id,
@@ -190,7 +185,7 @@ class TelemetryProcessor:
     
     async def _get_or_create_sensor(
         self,
-        equipment_id: int,
+        equipment: Equipment,
         sensor_data: Dict[str, Any],
         item: Dict[str, Any],
         db: AsyncSession,
@@ -204,7 +199,7 @@ class TelemetryProcessor:
         sensor = await Sensor.get_by_uuid(db, sensor_uuid)
         
         if sensor:
-            if sensor.equipment_id != equipment_id:
+            if sensor.equipment_id != equipment.id:
                 raise ValueError(f"Sensor {sensor_uuid} não pertence ao equipamento")
             return sensor
         
@@ -214,8 +209,11 @@ class TelemetryProcessor:
             name=sensor_data.get("sensor_nome", f"Sensor {sensor_uuid[:8]}"),
             type=sensor_data.get("sensor_tipo") or sensor_data.get("tipo", "desconhecido"),
             unit=sensor_data.get("sensor_unidade"),
-            status=sensor_data.get("sensor_status", "ATIVO"),
-            equipment_id=equipment_id,
+            status=self._normalize_status(sensor_data.get("sensor_status")),
+            equipment_id=equipment.id,
+            tenant_id=equipment.tenant_id,
+            organization_id=equipment.organization_id,
+            workspace_id=equipment.workspace_id,
             manufacturer=sensor_data.get("sensor_fabricante"),
             model=sensor_data.get("sensor_modelo"),
             firmware=sensor_data.get("sensor_firmware"),
@@ -233,7 +231,7 @@ class TelemetryProcessor:
     def _prepare_telemetry_data(
         self,
         sensor_id: int,
-        equipment_id: int,
+        equipment: Equipment,
         sensor_data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Prepara dados de telemetria para inserção."""
@@ -276,9 +274,25 @@ class TelemetryProcessor:
         
         return {
             "sensor_id": sensor_id,
-            "equipment_id": equipment_id,
+            "equipment_id": equipment.id,
+            "tenant_id": equipment.tenant_id,
+            "organization_id": equipment.organization_id,
+            "workspace_id": equipment.workspace_id,
             "value": valor,
             "status": status,
             "timestamp": timestamp,
             "extra_metadata": metadata if metadata else None,
         }
+
+    @staticmethod
+    def _normalize_status(value: Optional[str]) -> str:
+        if not value:
+            return "active"
+        normalized = value.strip().lower()
+        if normalized in ("ativo", "active"):
+            return "active"
+        if normalized in ("inativo", "inactive"):
+            return "inactive"
+        if normalized in ("bloqueado", "blocked"):
+            return "blocked"
+        return "active"

@@ -1,8 +1,8 @@
-# Arquitetura do Backend - Easy Smart Monitor v1.1.0
+# Arquitetura do Backend - Easy Smart Monitor v1.2.7
 
 ## 📐 Visão Geral
 
-Este documento descreve a arquitetura do backend da API Easy Smart Monitor v1.1.0, implementando o **Claim Check Pattern** e **TimescaleDB Continuous Aggregates** para processar payloads grandes de telemetria de forma escalável.
+Este documento descreve a arquitetura do backend da API Easy Smart Monitor v1.2.7, implementando o **Claim Check Pattern** e **TimescaleDB Continuous Aggregates** para processar payloads grandes de telemetria de forma escalável.
 
 ## 🏗️ Arquitetura de Alto Nível
 
@@ -109,7 +109,7 @@ data = await storage_client.download_file(claim_check['claim_check'])
 
 # 2. Descomprime GZIP
 # 3. Processa telemetria
-result = await processor.process_bulk(user_id, data, db)
+result = await processor.process_bulk(tenant_id, org_id, workspace_id, data, db)
 
 # 4. Insere no TimescaleDB (bulk)
 # 5. Remove arquivo (opcional)
@@ -451,4 +451,4 @@ Todas as configurações via `.env`:
 
 ---
 
-**Arquitetura v1.1.0 escalável e robusta para milhões de pontos de telemetria!** 🚀
+**Arquitetura v1.2.7 escalável e robusta para milhões de pontos de telemetria!** 🚀

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     
     # Aplicação
     APP_NAME: str = Field(default="Easy Smart Monitor Workers", description="Nome da aplicação")
-    APP_VERSION: str = Field(default="1.1.0", description="Versão da aplicação")
+    APP_VERSION: str = Field(default="1.2.7", description="Versão da aplicação")
     DEBUG: bool = Field(default=False, description="Modo debug")
     
     # Banco de Dados
@@ -64,6 +64,11 @@ class Settings(BaseSettings):
         default=False,
         description="Registra uso diário por tenant (billing-ready)"
     )
+
+    # Alertas / Webhooks (Fase 7)
+    ALERTS_ENABLED: bool = Field(default=False, description="Ativa worker de alertas")
+    WEBHOOKS_ENABLED: bool = Field(default=False, description="Ativa envio de webhooks")
+    ALERT_POLL_SECONDS: int = Field(default=60, description="Intervalo do cron de alertas (segundos)")
     
     class Config:
         env_file = ".env"

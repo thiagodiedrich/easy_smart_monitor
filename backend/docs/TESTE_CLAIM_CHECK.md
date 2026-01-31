@@ -65,7 +65,6 @@ curl -X POST http://localhost:8000/api/v1/telemetry/bulk \
 {
   "status": "accepted",
   "received": 1,
-  "message": "Dados recebidos e enviados para processamento",
   "claim_check": "telemetry/2024-01-15-10-30-00/uuid.json.gz"
 }
 ```

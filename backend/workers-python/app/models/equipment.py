@@ -5,10 +5,11 @@ Representa um dispositivo físico que possui sensores.
 """
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+import enum
 
 from app.core.database import Base
 
@@ -21,15 +22,22 @@ class Equipment(Base):
     id = Column(Integer, primary_key=True, index=True)
     uuid = Column(String(36), unique=True, index=True, nullable=False)
     name = Column(String(200), nullable=False)
-    location = Column(String(200), nullable=True)
-    status = Column(String(20), default="ATIVO", nullable=False)
+    class Status(str, enum.Enum):
+        ACTIVE = "active"
+        INACTIVE = "inactive"
+        BLOCKED = "blocked"
+
+    status = Column(
+        Enum(Status, name="entity_status"),
+        default=Status.ACTIVE,
+        nullable=False
+    )
     collection_interval = Column(Integer, default=60, nullable=False)
     siren_active = Column(Boolean, default=False, nullable=False)
     siren_time = Column(Integer, default=120, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
-    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     

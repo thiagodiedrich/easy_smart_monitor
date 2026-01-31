@@ -45,9 +45,9 @@ export async function validateUserCredentials(username, password, userType, ipAd
         tenant_id,
         organization_id,
         workspace_id,
+        role,
         user_type,
         status,
-        is_active,
         failed_login_attempts,
         locked_until
       FROM users
@@ -130,6 +130,7 @@ export async function validateUserCredentials(username, password, userType, ipAd
       tenant_id: user.tenant_id,
       organization_id: user.organization_id,
       workspace_id: user.workspace_id,
+      role: user.role,
       user_type: user.user_type,
       status: user.status,
     };
