@@ -54,4 +54,13 @@ export default {
   // Logging
   logLevel: process.env.LOG_LEVEL || 'info',
   nodeEnv: process.env.NODE_ENV || 'development',
+
+  // Multi-tenant (Fase 0 - desativado por padrão)
+  multiTenant: {
+    enabled: (process.env.MULTI_TENANT_ENABLED || 'false').toLowerCase() === 'true',
+    enforce: (process.env.MULTI_TENANT_ENFORCE || 'false').toLowerCase() === 'true',
+    tenantHeader: process.env.TENANT_HEADER || 'x-tenant-id',
+    organizationHeader: process.env.ORGANIZATION_HEADER || 'x-organization-id',
+    workspaceHeader: process.env.WORKSPACE_HEADER || 'x-workspace-id',
+  },
 };

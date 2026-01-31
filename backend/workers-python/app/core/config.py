@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = Field(default="INFO", description="Nível de log")
     LOG_FORMAT: str = Field(default="json", description="Formato de log")
+
+    # Multi-tenant (Fase 0 - opcional)
+    MULTI_TENANT_ENABLED: bool = Field(default=False, description="Ativa contexto multi-tenant")
     
     class Config:
         env_file = ".env"

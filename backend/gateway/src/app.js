@@ -139,6 +139,18 @@ await app.register(jwt, {
   },
 });
 
+// Contexto multi-tenant (Fase 0 - opcional)
+if (config.multiTenant.enabled) {
+  try {
+    await app.register(import('./plugins/tenant-context.js'));
+    logger.info('Tenant context plugin registrado', {
+      enforce: config.multiTenant.enforce,
+    });
+  } catch (error) {
+    logger.warn('Erro ao registrar tenant context plugin', { error: error.message });
+  }
+}
+
 // Inicializar Storage (MinIO)
 initStorage();
 

@@ -7,4 +7,5 @@ Ordem de execução:
 3. 003_continuous_aggregates - Cria continuous aggregates
 4. 004_continuous_aggregates_policies - Configura políticas
 5. 005_user_security_fields - Campos de segurança do usuário (UserType, UserStatus, etc.)
+6. 006_tenant_organization_workspace - Tabelas SaaS base (tenants, organizations, workspaces)
 """

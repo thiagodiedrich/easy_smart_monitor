@@ -10,7 +10,10 @@ from app.core.database import engine, Base
 async def upgrade():
     """Cria todas as tabelas base a partir dos modelos."""
     # Importar modelos para registrá-los em Base.metadata
-    from app.models import User, Equipment, Sensor, TelemetryData  # noqa: F401
+    from app.models.user import User  # noqa: F401
+    from app.models.equipment import Equipment  # noqa: F401
+    from app.models.sensor import Sensor  # noqa: F401
+    from app.models.telemetry_data import TelemetryData  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("✅ Tabelas base criadas (users, equipments, sensors, telemetry_data)")
@@ -18,7 +21,10 @@ async def upgrade():
 
 async def downgrade():
     """Remove as tabelas base (ordem inversa por causa de FKs)."""
-    from app.models import User, Equipment, Sensor, TelemetryData  # noqa: F401
+    from app.models.user import User  # noqa: F401
+    from app.models.equipment import Equipment  # noqa: F401
+    from app.models.sensor import Sensor  # noqa: F401
+    from app.models.telemetry_data import TelemetryData  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     print("⚠️  Tabelas base removidas")
