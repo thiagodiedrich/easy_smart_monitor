@@ -36,9 +36,16 @@ async def upgrade():
             await db.commit()
 
             await db.execute(text("""
-                ALTER TABLE equipments
-                ADD CONSTRAINT equipments_uuid_tenant_org_ws_key
-                UNIQUE (uuid, tenant_id, organization_id, workspace_id);
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'equipments_uuid_tenant_org_ws_key'
+                    ) THEN
+                        ALTER TABLE equipments
+                        ADD CONSTRAINT equipments_uuid_tenant_org_ws_key
+                        UNIQUE (uuid, tenant_id, organization_id, workspace_id);
+                    END IF;
+                END $$;
             """))
             await db.commit()
         except Exception:
