@@ -1,6 +1,6 @@
-# Fase 1.4.0 — Backend Estável (Hotfixes e Governança)
+# Fase 1.4.1 — Backend Estável (Hotfixes e Governança)
 
-Este documento resume as implementações consolidadas na versão **1.4.0** do backend.
+Este documento resume as implementações consolidadas na versão **1.4.1** do backend.
 
 ## ✅ Entregas
 

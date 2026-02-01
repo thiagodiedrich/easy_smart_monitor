@@ -1,4 +1,4 @@
-# Segurança - Defense in Depth v1.4.0
+# Segurança - Defense in Depth v1.4.1
 
 ## 🛡️ Arquitetura de Segurança
 
@@ -50,6 +50,20 @@ Implementação de **Defense in Depth** com 3 camadas de proteção:
 - ✅ Usuário `device` **NÃO** pode fazer login em `/login`
 - ✅ Apenas `device` pode enviar telemetria
 - ✅ Status do usuário: `active`, `inactive`, `blocked`
+
+## 🔎 Padrão de filtros (Multi-tenant)
+
+Para garantir isolamento e governança:
+- `tenant_id`, `organization_id`, `workspace_id` aceitam **0**, **um valor** ou **lista** (`1,2,3`)
+- **0 = todos** (apenas super admin)
+- Super admin (`tenant_id=0`) pode filtrar qualquer tenant/organization/workspace
+
+Exemplos:
+```
+GET /api/v1/tenant/users?tenant_id=1,2,3
+GET /api/v1/tenant/workspaces?tenant_id=2&organization_id=1,2
+GET /api/v1/tenant/sensors?tenant_id=2&workspace_id=10,11
+```
 
 ## 🚨 Status de Usuário
 

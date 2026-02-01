@@ -1,12 +1,12 @@
-# Easy Smart Monitor - Backend API v1.4.0
+# Easy Smart Monitor - Backend API v1.4.1
 
-**Versão estável:** 1.4.0
+**Versão estável:** 1.4.1
 
 API RESTful escalável para recebimento e processamento de dados de telemetria do Easy Smart Monitor.
 
-## 🎯 Versão 1.4.0 Estável
+## 🎯 Versão 1.4.1 Estável
 
-Esta é a versão estável do backend (código e documentação alinhados à v1.4.0), implementando:
+Esta é a versão estável do backend (código e documentação alinhados à v1.4.1), implementando:
 - ✅ **Claim Check Pattern** para payloads grandes
 - ✅ **TimescaleDB Continuous Aggregates** para consultas otimizadas
 - ✅ **Arquitetura distribuída** (Node.js Gateway + Kafka + Python Workers)
@@ -16,6 +16,21 @@ Esta é a versão estável do backend (código e documentação alinhados à v1.
 - ✅ **Quotas e Billing** (planos, limites, uso diário)
 - ✅ **Alertas e Webhooks** (thresholds 80/90/100)
 - ✅ **Admin Master global** (tenant_id=0)
+
+## 🔎 Padrão de filtros (Multi-tenant)
+
+**Regra padrão para todas as APIs de listagem:**
+- `tenant_id`, `organization_id`, `workspace_id` aceitam **0**, **um valor** ou **lista** (`1,2,3`)
+- **0 = todos** (somente para super admin)
+- Super admin (`tenant_id=0`) pode filtrar qualquer tenant/organization/workspace
+
+### Exemplos
+
+```
+GET /api/v1/tenant/users?tenant_id=1,2,3
+GET /api/v1/tenant/workspaces?tenant_id=2&organization_id=1,2
+GET /api/v1/tenant/sensors?tenant_id=2&workspace_id=10,11
+```
 
 ## 🏗️ Arquitetura
 
@@ -177,7 +192,7 @@ backend/
 │   └── run_migrations.py   # Script de migrations
 │
 ├── docker-compose.yml       # Orquestração de serviços
-├── VERSION                  # Versão do backend (1.4.0)
+├── VERSION                  # Versão do backend (1.4.1)
 ├── README.md                # Este arquivo
 ├── docs/                    # Documentação detalhada
 │   ├── API_ANALYTICS.md
@@ -330,7 +345,7 @@ Proprietário - Datacase
 
 ## 📋 Histórico de Versões (Changelog)
 
-### [1.4.0] - 2024-02-09 - Estável Atualizada
+### [1.4.1] - 2024-02-09 - Estável Atualizada
 
 **Melhorias e Correções:**
 - ✅ **Migrations mais resilientes** (007, 010, 017, 021, 022, 023) em bases existentes
@@ -380,7 +395,7 @@ Para o changelog completo e detalhado, consulte: **CHANGELOG.md**
 - **docs/API_ANALYTICS.md**: Documentação detalhada dos endpoints de analytics
 - **docs/SECURITY.md**: Detalhes de segurança e Defense in Depth
 - **CHANGELOG.md**: Histórico completo e detalhado de versões
-- **VERSION**: Arquivo com a versão atual do backend (1.4.0)
+- **VERSION**: Arquivo com a versão atual do backend (1.4.1)
 
 ## 🆘 Suporte
 
@@ -392,4 +407,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**Backend v1.4.0 estável - Pronto para produção!** 🚀
+**Backend v1.4.1 estável - Pronto para produção!** 🚀

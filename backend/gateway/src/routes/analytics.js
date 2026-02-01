@@ -16,10 +16,29 @@ const errorResponseSchema = {
   },
 };
 
+function parseIntArrayOrNull(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  const raw = Array.isArray(value) ? value : String(value).split(',');
+  const parsed = raw
+    .map((item) => parseInt(String(item).trim(), 10))
+    .filter((item) => !Number.isNaN(item));
+  return parsed.length ? parsed : null;
+}
+
 function resolveTenantScope(request, reply) {
   const tenantId = request.user?.tenant_id || request.tenantContext?.tenantId || null;
   const organizationId = request.user?.organization_id || request.tenantContext?.organizationId || null;
   const workspaceId = request.user?.workspace_id || request.tenantContext?.workspaceId || null;
+  const isSuper = tenantId !== null && Number(tenantId) === 0;
+  const tenantFilter = parseIntArrayOrNull(request.query?.tenant_id);
+  const organizationFilter = parseIntArrayOrNull(request.query?.organization_id);
+  const workspaceFilter = parseIntArrayOrNull(request.query?.workspace_id);
+  const hasFilters = Boolean(tenantFilter || organizationFilter || workspaceFilter);
+  const effectiveTenant = isSuper && hasFilters ? (tenantFilter ?? null) : tenantId;
+  const effectiveOrganization = isSuper && hasFilters ? organizationFilter : organizationId;
+  const effectiveWorkspace = isSuper && hasFilters ? workspaceFilter : workspaceId;
 
   if (config.multiTenant.enabled && config.multiTenant.enforce && !tenantId) {
     reply.code(401).send({
@@ -28,8 +47,13 @@ function resolveTenantScope(request, reply) {
     });
     return null;
   }
-  const isSystemTenant = tenantId !== null && Number(tenantId) === 0;
-  return { tenantId, organizationId, workspaceId, isSystemTenant };
+  const isSystemTenant = isSuper && !hasFilters;
+  return {
+    tenantId: effectiveTenant,
+    organizationId: effectiveOrganization,
+    workspaceId: effectiveWorkspace,
+    isSystemTenant,
+  };
 }
 
 function appendTenantFilters(scope, params, tableAlias = 'e') {
@@ -42,8 +66,15 @@ function appendTenantFilters(scope, params, tableAlias = 'e') {
 
   const clauses = [];
   if (scope.tenantId) {
-    clauses.push(`${tableAlias}.tenant_id = $${params.length + 1}`);
-    params.push(scope.tenantId);
+    if (Array.isArray(scope.tenantId)) {
+      if (!scope.tenantId.includes(0)) {
+        clauses.push(`${tableAlias}.tenant_id = ANY($${params.length + 1})`);
+        params.push(scope.tenantId);
+      }
+    } else {
+      clauses.push(`${tableAlias}.tenant_id = $${params.length + 1}`);
+      params.push(scope.tenantId);
+    }
   }
   if (scope.organizationId) {
     if (Array.isArray(scope.organizationId)) {
@@ -564,6 +595,9 @@ export async function analyticsRoutes(fastify, options) {
       querystring: {
         type: 'object',
         properties: {
+          tenant_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
+          organization_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
+          workspace_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
           period: { type: 'string', enum: ['hour', 'day', 'raw'] },
           start_date: { type: 'string', format: 'date-time' },
           end_date: { type: 'string', format: 'date-time' },
@@ -609,6 +643,9 @@ export async function analyticsRoutes(fastify, options) {
       querystring: {
         type: 'object',
         properties: {
+          tenant_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
+          organization_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
+          workspace_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
           period: { type: 'string', enum: ['hour', 'day', 'raw'] },
           start_date: { type: 'string', format: 'date-time' },
           end_date: { type: 'string', format: 'date-time' }
@@ -653,6 +690,9 @@ export async function analyticsRoutes(fastify, options) {
       querystring: {
         type: 'object',
         properties: {
+          tenant_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
+          organization_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
+          workspace_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
           period: { type: 'string', enum: ['24h', '7d', '30d', '1y'] },
           sensor_type: { type: 'string' }
         }
@@ -696,6 +736,9 @@ export async function analyticsRoutes(fastify, options) {
       querystring: {
         type: 'object',
         properties: {
+          tenant_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
+          organization_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
+          workspace_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
           hours: { type: 'integer', minimum: 1, maximum: 168 },
           sensor_type: { type: 'string' }
         }

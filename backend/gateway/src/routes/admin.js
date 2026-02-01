@@ -231,6 +231,12 @@ export const adminRoutes = async (fastify) => {
     schema: {
       description: 'Lista tenants (admin global)',
       tags: ['Admin'],
+      querystring: {
+        type: 'object',
+        properties: {
+          tenant_id: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }, { type: 'array', items: { type: 'number' } }] },
+        },
+      },
       response: {
         200: {
           type: 'array',
@@ -264,8 +270,18 @@ export const adminRoutes = async (fastify) => {
         },
       },
     },
-  }, async (_request, reply) => {
-    const result = await queryDatabase(`SELECT * FROM tenants ORDER BY id ASC`);
+  }, async (request, reply) => {
+    const tenantIds = request.query?.tenant_id
+      ? String(request.query.tenant_id).split(',').map((v) => parseInt(v.trim(), 10)).filter((v) => !Number.isNaN(v))
+      : null;
+    const params = [];
+    let query = 'SELECT * FROM tenants WHERE 1=1';
+    if (tenantIds && tenantIds.length && !tenantIds.includes(0)) {
+      params.push(tenantIds);
+      query += ` AND id = ANY($${params.length}::int[])`;
+    }
+    query += ' ORDER BY id ASC';
+    const result = await queryDatabase(query, params);
     return reply.send(result);
   });
 
@@ -546,6 +562,12 @@ export const adminRoutes = async (fastify) => {
     schema: {
       description: 'Lista planos (admin global)',
       tags: ['Admin'],
+      querystring: {
+        type: 'object',
+        properties: {
+          code: { type: 'string' },
+        },
+      },
       response: {
         200: {
           type: 'array',
@@ -586,8 +608,16 @@ export const adminRoutes = async (fastify) => {
         },
       },
     },
-  }, async (_request, reply) => {
-    const result = await queryDatabase(`SELECT * FROM plans ORDER BY code ASC`);
+  }, async (request, reply) => {
+    const code = request.query?.code || null;
+    const params = [];
+    let query = 'SELECT * FROM plans WHERE 1=1';
+    if (code) {
+      params.push(code);
+      query += ` AND code = $${params.length}`;
+    }
+    query += ' ORDER BY code ASC';
+    const result = await queryDatabase(query, params);
     return reply.send(result);
   });
 

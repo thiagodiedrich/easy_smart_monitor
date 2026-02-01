@@ -1,4 +1,4 @@
-# Guia de Deploy - Easy Smart Monitor Backend v1.4.0
+# Guia de Deploy - Easy Smart Monitor Backend v1.4.1
 
 ## 🚀 Deploy com Docker Compose
 
@@ -28,6 +28,19 @@ Edite o arquivo `.env` e configure:
 - `MINIO_ROOT_PASSWORD`: Senha do MinIO (padrão: minioadmin)
 - `VALID_USERS`: Usuários para desenvolvimento (JSON)
 - Outras configurações conforme necessário
+
+### 🔎 Padrão de filtros (Multi-tenant)
+
+Em todas as rotas de listagem, os filtros aceitam:
+- `tenant_id`, `organization_id`, `workspace_id` = **0**, **um valor** ou **lista** (`1,2,3`)
+- **0 = todos** (apenas super admin)
+
+Exemplos:
+```
+GET /api/v1/tenant/users?tenant_id=1,2,3
+GET /api/v1/tenant/workspaces?tenant_id=2&organization_id=1,2
+GET /api/v1/tenant/sensors?tenant_id=2&workspace_id=10,11
+```
 
 3. **Iniciar Serviços**
 
@@ -415,4 +428,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**Backend v1.4.0 pronto para produção com Claim Check Pattern e Continuous Aggregates!** 🚀
+**Backend v1.4.1 pronto para produção com Claim Check Pattern e Continuous Aggregates!** 🚀

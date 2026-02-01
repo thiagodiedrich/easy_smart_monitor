@@ -1,6 +1,6 @@
 {
   "name": "easysmart-gateway",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "API Gateway Node.js + Fastify para Easy Smart Monitor",
   "main": "src/app.js",
   "type": "module",

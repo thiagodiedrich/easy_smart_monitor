@@ -70,7 +70,7 @@ await app.register(swagger, {
     info: {
       title: 'Easy Smart Monitor API',
       description: 'API RESTful escalável para recebimento e processamento de dados de telemetria',
-      version: '1.4.0',
+      version: '1.4.1',
       contact: {
         name: 'Datacase',
       },
@@ -290,7 +290,7 @@ await app.register(tenantRoutes, { prefix: '/api/v1/tenant' });
 app.get('/', async (request, reply) => {
   return {
     name: 'Easy Smart Monitor Gateway',
-      version: '1.4.0',
+      version: '1.4.1',
     status: 'online',
     docs: '/api/v1/docs',
   };

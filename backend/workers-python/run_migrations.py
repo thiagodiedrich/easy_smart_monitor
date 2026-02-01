@@ -50,6 +50,9 @@ async def run_migrations(command):
         "027_equipments_unique_scope",
         "028_unique_super_user_per_tenant",
         "029_add_org_status",
+        "030_add_workspace_status",
+        "031_add_workspace_description",
+        "032_users_name_backfill",
     ]
     migrations = [(name, *_load_migration(name)) for name in migration_names]
     

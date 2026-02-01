@@ -101,4 +101,4 @@ O backend está **completo e otimizado** conforme a arquitetura especificada:
 
 ---
 
-**Backend v1.4.0 verificado e otimizado!** ✅
+**Backend v1.4.1 verificado e otimizado!** ✅

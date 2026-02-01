@@ -1,7 +1,24 @@
 # Changelog - Easy Smart Monitor Backend
 
 Todas as mudanças notáveis do backend estão documentadas neste arquivo.  
-**Versão estável atual:** 1.4.0
+**Versão estável atual:** 1.4.1
+
+---
+
+## [1.4.1] - 2024-02-09 - Estável Atualizada
+
+### ✨ Entregas
+- ✅ Filtros multi-tenant (tenant/org/workspace) com listas e `0 = todos`
+- ✅ CRUD de equipments e sensors no escopo do tenant
+- ✅ Status em organizations e workspaces (active/inactive/blocked)
+- ✅ Description em workspaces e name em users (backfill)
+- ✅ Swagger ampliado e coleção Postman de testes
+
+### 📝 Migrations (1.4.1)
+- **029_add_org_status**: status em organizations
+- **030_add_workspace_status**: status em workspaces
+- **031_add_workspace_description**: description em workspaces
+- **032_users_name_backfill**: name em users + backfill
 
 ---
 

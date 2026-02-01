@@ -1,8 +1,8 @@
-# Arquitetura do Backend - Easy Smart Monitor v1.4.0
+# Arquitetura do Backend - Easy Smart Monitor v1.4.1
 
 ## 📐 Visão Geral
 
-Este documento descreve a arquitetura do backend da API Easy Smart Monitor v1.4.0, implementando o **Claim Check Pattern** e **TimescaleDB Continuous Aggregates** para processar payloads grandes de telemetria de forma escalável.
+Este documento descreve a arquitetura do backend da API Easy Smart Monitor v1.4.1, implementando o **Claim Check Pattern** e **TimescaleDB Continuous Aggregates** para processar payloads grandes de telemetria de forma escalável.
 
 ## 🏗️ Arquitetura de Alto Nível
 
@@ -93,6 +93,20 @@ POST /api/v1/telemetry/bulk
 }
 // 4. Envia Claim Check para Kafka (~1KB)
 // 5. Responde 202 Accepted (imediato)
+```
+
+## 🔎 Padrão de filtros (Multi-tenant)
+
+Para garantir isolamento e governança:
+- `tenant_id`, `organization_id`, `workspace_id` aceitam **0**, **um valor** ou **lista** (`1,2,3`)
+- **0 = todos** (apenas super admin)
+- Super admin (`tenant_id=0`) pode filtrar qualquer tenant/organization/workspace
+
+Exemplos:
+```
+GET /api/v1/tenant/users?tenant_id=1,2,3
+GET /api/v1/tenant/workspaces?tenant_id=2&organization_id=1,2
+GET /api/v1/tenant/sensors?tenant_id=2&workspace_id=10,11
 ```
 
 #### 2. Processamento (Worker)
@@ -451,4 +465,4 @@ Todas as configurações via `.env`:
 
 ---
 
-**Arquitetura v1.4.0 escalável e robusta para milhões de pontos de telemetria!** 🚀
+**Arquitetura v1.4.1 escalável e robusta para milhões de pontos de telemetria!** 🚀
