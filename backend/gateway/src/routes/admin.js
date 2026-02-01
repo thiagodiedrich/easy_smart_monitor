@@ -108,17 +108,6 @@ export const adminRoutes = async (fastify) => {
           email: { type: 'string' },
           password: { type: 'string' },
         },
-        example: {
-          name: 'Empresa Exemplo',
-          slug: 'empresa-exemplo',
-          status: 'active',
-          plan_code: 'legacy',
-          is_white_label: false,
-          document: '00.000.000/0001-00',
-          phone: '+55 11 99999-0000',
-          email: 'admin@empresa.com',
-          password: 'SenhaForte@123',
-        },
       },
       response: {
         201: {

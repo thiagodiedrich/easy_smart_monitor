@@ -1,12 +1,12 @@
-# Easy Smart Monitor - Backend API v1.3.0
+# Easy Smart Monitor - Backend API v1.4.0
 
-**Versão estável:** 1.3.0
+**Versão estável:** 1.4.0
 
 API RESTful escalável para recebimento e processamento de dados de telemetria do Easy Smart Monitor.
 
-## 🎯 Versão 1.3.0 Estável
+## 🎯 Versão 1.4.0 Estável
 
-Esta é a versão estável do backend (código e documentação alinhados à v1.3.0), implementando:
+Esta é a versão estável do backend (código e documentação alinhados à v1.4.0), implementando:
 - ✅ **Claim Check Pattern** para payloads grandes
 - ✅ **TimescaleDB Continuous Aggregates** para consultas otimizadas
 - ✅ **Arquitetura distribuída** (Node.js Gateway + Kafka + Python Workers)
@@ -177,7 +177,7 @@ backend/
 │   └── run_migrations.py   # Script de migrations
 │
 ├── docker-compose.yml       # Orquestração de serviços
-├── VERSION                  # Versão do backend (1.3.0)
+├── VERSION                  # Versão do backend (1.4.0)
 ├── README.md                # Este arquivo
 ├── docs/                    # Documentação detalhada
 │   ├── API_ANALYTICS.md
@@ -330,7 +330,7 @@ Proprietário - Datacase
 
 ## 📋 Histórico de Versões (Changelog)
 
-### [1.3.0] - 2024-02-09 - Estável Atualizada
+### [1.4.0] - 2024-02-09 - Estável Atualizada
 
 **Melhorias e Correções:**
 - ✅ **Migrations mais resilientes** (007, 010, 017, 021, 022, 023) em bases existentes
@@ -380,7 +380,7 @@ Para o changelog completo e detalhado, consulte: **CHANGELOG.md**
 - **docs/API_ANALYTICS.md**: Documentação detalhada dos endpoints de analytics
 - **docs/SECURITY.md**: Detalhes de segurança e Defense in Depth
 - **CHANGELOG.md**: Histórico completo e detalhado de versões
-- **VERSION**: Arquivo com a versão atual do backend (1.3.0)
+- **VERSION**: Arquivo com a versão atual do backend (1.4.0)
 
 ## 🆘 Suporte
 
@@ -392,4 +392,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**Backend v1.3.0 estável - Pronto para produção!** 🚀
+**Backend v1.4.0 estável - Pronto para produção!** 🚀

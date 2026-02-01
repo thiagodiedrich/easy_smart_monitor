@@ -7,6 +7,8 @@ import { queryDatabase } from './database.js';
 import { logger } from './logger.js';
 import bcrypt from 'bcrypt';
 
+const authDebug = (process.env.POSTGRES_DEBUG || 'false').toLowerCase() === 'true';
+
 const maxAttempts = parseInt(process.env.LOGIN_MAX_ATTEMPTS || '5', 10);
 const blockMinutes = parseInt(process.env.LOGIN_BLOCK_MINUTES || '30', 10);
 
@@ -113,6 +115,14 @@ export async function validateUserCredentials(username, password, userType, ipAd
     
     // Verificar senha
     const passwordValid = await bcrypt.compare(password, user.hashed_password);
+
+    if (authDebug) {
+      logger.info('Auth debug: password compare', {
+        user_id: user.id,
+        username: user.username,
+        passwordValid,
+      });
+    }
     
     if (!passwordValid) {
       logger.warn('Tentativa de login com senha inválida', {

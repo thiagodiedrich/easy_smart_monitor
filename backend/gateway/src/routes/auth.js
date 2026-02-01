@@ -77,6 +77,7 @@ export const authRoutes = async (fastify) => {
       : null;
     
     if (!username || !password) {
+      logger.info('Login frontend branch: missing credentials', { username });
       return reply.code(401).send({ 
         error: 'INVALID_CREDENTIALS',
         message: `Credenciais inválidas. Após ${maxAttempts} tentativas seguidas, você ficará bloqueado por ${blockMinutes} minutos.` 
@@ -91,8 +92,18 @@ export const authRoutes = async (fastify) => {
       ipAddress,
       tenantId
     );
+
+    const debugPayload = {
+      username,
+      userFound: Boolean(user),
+      error: user?.error || null,
+      status: user?.status || null,
+      userType: user?.user_type || null,
+    };
+    logger.info(`Login frontend debug: ${JSON.stringify(debugPayload)}`);
     
     if (!user) {
+      logger.info('Login frontend branch: user not found', { username });
       return reply.code(401).send({ 
         error: 'INVALID_CREDENTIALS',
         message: `Credenciais inválidas. Após ${maxAttempts} tentativas seguidas, você ficará bloqueado por ${blockMinutes} minutos.` 
@@ -101,6 +112,7 @@ export const authRoutes = async (fastify) => {
     
     // Verificar se retornou erro de status
     if (user.error) {
+      logger.info('Login frontend branch: user error', { username, reason: user.error });
       const statusCode = user.error === 'BLOCKED' || user.error === 'LOCKED' ? 403 : 401;
       return reply.code(statusCode).send({
         error: user.error,
@@ -108,20 +120,6 @@ export const authRoutes = async (fastify) => {
       });
     }
     
-    if (user.user_type !== UserType.DEVICE) {
-      return reply.code(401).send({
-        error: 'INVALID_CREDENTIALS',
-        message: 'Credenciais inválidas',
-      });
-    }
-
-    if (!isValidDeviceScope(user)) {
-      return reply.code(403).send({
-        error: 'INVALID_SCOPE',
-        message: 'Usuário device deve ter 1 organization_id e 1+ workspace_id válidos',
-      });
-    }
-
     // Gerar tokens
     const accessToken = fastify.jwt.sign(
       { 
@@ -153,7 +151,7 @@ export const authRoutes = async (fastify) => {
 
     await saveRefreshToken(user.id, refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     
-    logger.info('Login frontend realizado com sucesso', { 
+    logger.info('Login frontend branch: success', { 
       username,
       user_id: user.id,
       ip: ipAddress,
@@ -505,3 +503,5 @@ export const authRoutes = async (fastify) => {
     }
   });
 };
+
+export default authRoutes;

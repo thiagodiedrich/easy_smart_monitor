@@ -1,11 +1,11 @@
 # Changelog - Easy Smart Monitor Backend
 
 Todas as mudanças notáveis do backend estão documentadas neste arquivo.  
-**Versão estável atual:** 1.3.0
+**Versão estável atual:** 1.4.0
 
 ---
 
-## [1.3.0] - 2024-02-09 - Estável Atualizada
+## [1.4.0] - 2024-02-09 - Estável Atualizada
 
 ### ✨ Entregas
 - ✅ Criação automática do banco antes das migrations
@@ -17,7 +17,7 @@ Todas as mudanças notáveis do backend estão documentadas neste arquivo.
 - ✅ Compose/config lendo `POSTGRES_*` e `MASTER_ADMIN_*` do `.env`
 - ✅ Docs atualizados para o fluxo `run_migrations.py upgrade`
 
-### 📝 Migrations (1.3.0)
+### 📝 Migrations (1.4.0)
 - **007_tenant_id_users_equipments**: fallback quando `equipments.user_id` não existe
 - **010_plans_and_limits**: defaults `0` para limites nulos
 - **017_equipments_sensors_telemetry_refactor**: cast de `status` para `text` no `lower()`

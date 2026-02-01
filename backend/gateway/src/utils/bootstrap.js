@@ -94,12 +94,22 @@ export async function bootstrapMasterAdmin() {
     }
   }
 
-  // Verificar se usuário já existe
-  const existing = await queryDatabase(
+  // Verificar se já existe super user para o tenant (role [0])
+  const existingSuper = await queryDatabase(
+    `SELECT id FROM users WHERE tenant_id = $1 AND role @> '[0]'::jsonb LIMIT 1`,
+    [tenantId]
+  );
+  if (existingSuper && existingSuper.length > 0) {
+    logger.info('Super user já existe para o tenant, bootstrap ignorado', { tenant_id: tenantId });
+    return;
+  }
+
+  // Verificar se usuário já existe por username
+  const existingByUsername = await queryDatabase(
     'SELECT id FROM users WHERE username = $1',
     [username]
   );
-  if (existing && existing.length > 0) {
+  if (existingByUsername && existingByUsername.length > 0) {
     logger.info('Usuário master já existe, bootstrap ignorado', { username });
     return;
   }

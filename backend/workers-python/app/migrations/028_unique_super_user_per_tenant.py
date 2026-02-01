@@ -10,6 +10,21 @@ async def upgrade():
     async with AsyncSessionLocal() as db:
         try:
             await db.execute(text("""
+                WITH ranked AS (
+                    SELECT id,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY tenant_id
+                               ORDER BY id
+                           ) AS rn
+                    FROM users
+                    WHERE role @> '[0]'::jsonb
+                )
+                DELETE FROM users
+                WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
+            """))
+            await db.commit()
+
+            await db.execute(text("""
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_users_super_by_tenant
                 ON users (tenant_id)
                 WHERE role @> '[0]'::jsonb;

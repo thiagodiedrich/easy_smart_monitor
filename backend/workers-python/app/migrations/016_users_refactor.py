@@ -90,8 +90,16 @@ async def upgrade():
 
             await db.execute(text("""
                 ALTER TABLE users
-                ALTER COLUMN organization_id TYPE INTEGER[] USING ARRAY[organization_id],
-                ALTER COLUMN workspace_id TYPE INTEGER[] USING ARRAY[workspace_id];
+                ALTER COLUMN organization_id TYPE INTEGER[] USING
+                  CASE
+                    WHEN pg_typeof(organization_id) = 'integer[]'::regtype THEN organization_id
+                    ELSE ARRAY[organization_id]
+                  END,
+                ALTER COLUMN workspace_id TYPE INTEGER[] USING
+                  CASE
+                    WHEN pg_typeof(workspace_id) = 'integer[]'::regtype THEN workspace_id
+                    ELSE ARRAY[workspace_id]
+                  END;
             """))
             await db.commit()
 

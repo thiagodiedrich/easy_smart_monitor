@@ -213,12 +213,6 @@ export const tenantRoutes = async (fastify) => {
           phone: { type: 'string' },
           email: { type: 'string' },
         },
-        example: {
-          name: 'Empresa Exemplo',
-          document: '00.000.000/0001-00',
-          phone: '+55 11 99999-0000',
-          email: 'contato@empresa.com',
-        },
       },
       response: {
         201: {
@@ -288,12 +282,6 @@ export const tenantRoutes = async (fastify) => {
           phone: { type: 'string' },
           email: { type: 'string' },
         },
-        example: {
-          name: 'Empresa Atualizada',
-          document: '00.000.000/0001-00',
-          phone: '+55 11 98888-0000',
-          email: 'contato@empresa.com',
-        },
       },
       response: {
         200: {
@@ -357,10 +345,6 @@ export const tenantRoutes = async (fastify) => {
         properties: {
           organization_id: { type: 'number' },
           name: { type: 'string' },
-        },
-        example: {
-          organization_id: 1,
-          name: 'Projeto Principal',
         },
       },
       response: {
@@ -446,9 +430,6 @@ export const tenantRoutes = async (fastify) => {
         properties: {
           name: { type: 'string' },
         },
-        example: {
-          name: 'Projeto Atualizado',
-        },
       },
       response: {
         200: {
@@ -516,12 +497,6 @@ export const tenantRoutes = async (fastify) => {
           threshold_percent: { type: 'number' },
           enabled: { type: 'boolean' },
         },
-        example: {
-          organization_id: 1,
-          workspace_ids: [1],
-          threshold_percent: 90,
-          enabled: true,
-        },
       },
       response: {
         201: {
@@ -576,12 +551,6 @@ export const tenantRoutes = async (fastify) => {
           workspace_ids: { type: 'array', items: { type: 'number' } },
           threshold_percent: { type: 'number' },
           enabled: { type: 'boolean' },
-        },
-        example: {
-          organization_id: 1,
-          workspace_ids: [1],
-          threshold_percent: 100,
-          enabled: true,
         },
       },
       response: {
@@ -650,14 +619,6 @@ export const tenantRoutes = async (fastify) => {
           secret: { type: 'string' },
           enabled: { type: 'boolean' },
         },
-        example: {
-          organization_id: 1,
-          workspace_ids: [1],
-          event_types: ['quota_80', 'quota_90'],
-          url: 'https://hooks.exemplo.com/telemetria',
-          secret: 'segredo-webhook',
-          enabled: true,
-        },
       },
       response: {
         201: {
@@ -714,14 +675,6 @@ export const tenantRoutes = async (fastify) => {
           url: { type: 'string' },
           secret: { type: 'string' },
           enabled: { type: 'boolean' },
-        },
-        example: {
-          organization_id: 1,
-          workspace_ids: [1],
-          event_types: ['quota_100'],
-          url: 'https://hooks.exemplo.com/telemetria',
-          secret: 'segredo-webhook',
-          enabled: true,
         },
       },
       response: {
@@ -809,16 +762,6 @@ export const tenantRoutes = async (fastify) => {
           status: { type: 'string', enum: ['active', 'inactive', 'blocked'] },
           organization_id: { oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }] },
           workspace_id: { oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }] },
-        },
-        example: {
-          name: 'João da Silva',
-          username: 'joao.silva',
-          email: 'joao@empresa.com',
-          password: 'SenhaForte@123',
-          role: { role: 'viewer' },
-          status: 'active',
-          organization_id: 1,
-          workspace_id: [1],
         },
       },
       response: {
@@ -1010,13 +953,6 @@ export const tenantRoutes = async (fastify) => {
           organization_id: { oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }] },
           workspace_id: { oneOf: [{ type: 'number' }, { type: 'array', items: { type: 'number' } }] },
         },
-        example: {
-          email: 'joao@empresa.com',
-          role: { role: 'manager' },
-          status: 'active',
-          organization_id: 1,
-          workspace_id: [1],
-        },
       },
       response: {
         200: {
@@ -1093,9 +1029,6 @@ export const tenantRoutes = async (fastify) => {
         properties: {
           password: { type: 'string' },
         },
-        example: {
-          password: 'NovaSenha@123',
-        },
       },
       response: {
         200: {
@@ -1130,9 +1063,6 @@ export const tenantRoutes = async (fastify) => {
         required: ['status'],
         properties: {
           status: { type: 'string', enum: ['active', 'inactive', 'blocked'] },
-        },
-        example: {
-          status: 'inactive',
         },
       },
       response: {
