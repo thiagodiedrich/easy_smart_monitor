@@ -5,7 +5,7 @@ export function useAuth() {
   const store = useAuthStore();
   
   const login = useCallback(async (email: string, password: string) => {
-    await store.login({ email, password });
+    await store.login({ username: email, password });
   }, [store]);
   
   const logout = useCallback(() => {

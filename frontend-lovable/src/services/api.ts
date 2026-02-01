@@ -94,6 +94,11 @@ api.interceptors.response.use(
 
     // Handle 401 - Unauthorized
     if (error.response?.status === 401) {
+      // Se for a rota de login, NÃO faz reload nem redirect, deixa o componente tratar o erro
+      if (originalRequest.url?.includes('/auth/login')) {
+        return Promise.reject(error);
+      }
+
       // Try to refresh token
       const refreshToken = useAuthStore.getState().refreshToken;
       

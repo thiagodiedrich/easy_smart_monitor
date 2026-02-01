@@ -1,19 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  LayoutDashboard,
-  Building2,
-  FolderKanban,
-  Users,
-  Bell,
-  Webhook,
-  Activity,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  Cpu,
-} from 'lucide-react';
+import { LayoutDashboard, Building2, FolderKanban, Users, Bell, Webhook, Activity, Settings, ChevronLeft, ChevronRight, Cpu, Clock, KeyRound, Gauge } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -26,15 +14,19 @@ interface NavItem {
 
 const mainNav: NavItem[] = [
   { title: 'Painel de Controle', href: '/dashboard', icon: LayoutDashboard },
-  { title: 'Organizations', href: '/organizations', icon: Building2 },
-  { title: 'Workspaces', href: '/workspaces', icon: FolderKanban },
+  { title: 'Empresas', href: '/organizations', icon: Building2 },
+  { title: 'Locais', href: '/workspaces', icon: FolderKanban },
+  { title: 'Equipamentos', href: '/equipments', icon: Cpu },
+  { title: 'Sensores', href: '/sensors', icon: Gauge },
   { title: 'Usuários', href: '/users', icon: Users },
   { title: 'Alertas', href: '/alerts', icon: Bell },
   { title: 'Webhooks', href: '/webhooks', icon: Webhook },
-  { title: 'Analytics', href: '/analytics', icon: Activity },
+  { title: 'Relatórios', href: '/analytics', icon: Activity },
+  { title: 'Auditoria', href: '/audit-logs', icon: Clock },
 ];
 
 const settingsNav: NavItem[] = [
+  { title: 'Planos', href: '/plans', icon: KeyRound },
   { title: 'Configurações', href: '/settings', icon: Settings },
 ];
 

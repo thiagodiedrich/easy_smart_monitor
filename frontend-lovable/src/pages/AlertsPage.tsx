@@ -10,6 +10,10 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  Settings,
+  Filter,
+  ChevronDown,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,11 +33,35 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from '@/components/ui/label';
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SkeletonTable } from '@/components/ui/skeleton-card';
+import { useSaaSContext } from '@/hooks/useSaaSContext';
 import api from '@/services/api';
 import type { Alert, AlertHistory } from '@/types';
+import { toast } from 'sonner';
 
 const container = {
   hidden: { opacity: 0 },
@@ -48,12 +76,30 @@ const item = {
   show: { opacity: 1, y: 0 },
 };
 
+type StatusOption = 'active' | 'blocked' | 'inactive';
+
 export default function AlertsPage() {
+  const { organizations, fetchOrganizations } = useSaaSContext();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [history, setHistory] = useState<AlertHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<StatusOption[]>(['active', 'blocked']);
   const [activeTab, setActiveTab] = useState('alerts');
+  const [isDialogOpen, setIsDialogOpened] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    condition: '',
+    threshold: 0,
+    severity: 'medium' as any,
+    status: 'active' as StatusOption,
+    organization_id: -1,
+  });
 
   useEffect(() => {
     fetchData();
@@ -65,9 +111,10 @@ export default function AlertsPage() {
       const [alertsRes, historyRes] = await Promise.all([
         api.get<Alert[]>('/tenant/alerts'),
         api.get<AlertHistory[]>('/tenant/alerts/history'),
+        fetchOrganizations()
       ]);
-      setAlerts(alertsRes.data);
-      setHistory(historyRes.data);
+      setAlerts(alertsRes.data || []);
+      setHistory(historyRes.data || []);
     } catch (error) {
       console.error('Error fetching alerts:', error);
       setAlerts([]);
@@ -77,9 +124,95 @@ export default function AlertsPage() {
     }
   };
 
-  const filteredAlerts = alerts.filter((alert) =>
-    (alert.name?.toLowerCase() || '').includes(searchQuery.toLowerCase())
-  );
+  const handleOpenDialog = (alert?: Alert) => {
+    if (alert) {
+      setEditingAlert(alert);
+      setFormData({
+        name: alert.name || '',
+        description: alert.description || '',
+        condition: alert.condition || '',
+        threshold: alert.threshold || 0,
+        severity: alert.severity || 'medium',
+        status: (alert.status as StatusOption) || 'active',
+        organization_id: alert.organization_id || -1,
+      });
+    } else {
+      setEditingAlert(null);
+      setFormData({
+        name: '',
+        description: '',
+        condition: '',
+        threshold: 0,
+        severity: 'medium',
+        status: 'active',
+        organization_id: -1,
+      });
+    }
+    setIsDialogOpened(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const payload = {
+        ...formData,
+        organization_id: formData.organization_id === -1 ? 0 : formData.organization_id
+      };
+
+      if (editingAlert) {
+        await api.put(`/tenant/alerts/${editingAlert.id}`, payload);
+        toast.success('Alerta atualizado com sucesso!');
+      } else {
+        await api.post('/tenant/alerts', payload);
+        toast.success('Alerta criado com sucesso!');
+      }
+      setIsDialogOpened(false);
+      fetchData();
+    } catch (error: any) {
+      console.error('Error saving alert:', error);
+      toast.error(error.response?.data?.error || 'Erro ao salvar alerta');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Tem certeza que deseja excluir este alerta?')) return;
+
+    try {
+      await api.delete(`/tenant/alerts/${id}`);
+      toast.success('Alerta excluído com sucesso!');
+      fetchData();
+    } catch (error: any) {
+      console.error('Error deleting alert:', error);
+      toast.error(error.response?.data?.error || 'Erro ao excluir alerta');
+    }
+  };
+
+  const toggleStatus = (status: StatusOption) => {
+    setSelectedStatus(prev => 
+      prev.includes(status) 
+        ? prev.filter(s => s !== status) 
+        : [...prev, status]
+    );
+  };
+
+  const filteredAlerts = alerts.filter((alert) => {
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = 
+      (alert.name?.toLowerCase() || '').includes(searchLower) ||
+      (alert.description?.toLowerCase() || '').includes(searchLower) ||
+      (alert.condition?.toLowerCase() || '').includes(searchLower) ||
+      (alert.severity?.toLowerCase() || '').includes(searchLower) ||
+      (alert.status?.toLowerCase() || '').includes(searchLower);
+
+    if (selectedStatus.length === 0) return false;
+    const matchesStatus = selectedStatus.includes(alert.status as StatusOption);
+
+    return matchesSearch && matchesStatus;
+  });
 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
@@ -102,8 +235,18 @@ export default function AlertsPage() {
         return <Badge className="bg-success/10 text-success border-success/20">Ativo</Badge>;
       case 'inactive':
         return <Badge variant="secondary">Inativo</Badge>;
+      case 'blocked':
+        return <Badge className="bg-destructive/10 text-destructive border-destructive/20">Bloqueado</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getStatusLabel = (status: StatusOption) => {
+    switch (status) {
+      case 'active': return 'Ativo';
+      case 'blocked': return 'Bloqueado';
+      case 'inactive': return 'Inativo';
     }
   };
 
@@ -136,7 +279,7 @@ export default function AlertsPage() {
             Gerencie regras e histórico de alertas
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => handleOpenDialog()}>
           <Plus className="h-4 w-4" />
           Novo Alerta
         </Button>
@@ -192,20 +335,74 @@ export default function AlertsPage() {
       {/* Tabs */}
       <motion.div variants={item}>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
             <TabsList>
               <TabsTrigger value="alerts">Regras de Alerta</TabsTrigger>
               <TabsTrigger value="history">Histórico</TabsTrigger>
             </TabsList>
             
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-64"
-              />
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+              <div className="relative flex-1 w-full sm:max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 w-full sm:w-64"
+                />
+              </div>
+
+              {activeTab === 'alerts' && (
+                <div className="w-full sm:w-auto">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full sm:w-[200px] justify-between font-normal">
+                        <div className="flex items-center gap-2">
+                          <Filter className="h-4 w-4 text-muted-foreground" />
+                          <span>Status: </span>
+                          <div className="flex gap-1 overflow-hidden">
+                            {selectedStatus.length === 0 ? (
+                              <span className="text-muted-foreground">Nenhum</span>
+                            ) : selectedStatus.length === 3 ? (
+                              <span>Todos</span>
+                            ) : (
+                              selectedStatus.map(s => (
+                                <Badge key={s} variant="secondary" className="h-5 px-1 text-[10px]">
+                                  {getStatusLabel(s)}
+                                </Badge>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[200px] p-2" align="start">
+                      <div className="space-y-2">
+                        {(['active', 'blocked', 'inactive'] as StatusOption[]).map((status) => (
+                          <div
+                            key={status}
+                            className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent cursor-pointer"
+                            onClick={() => toggleStatus(status)}
+                          >
+                            <Checkbox
+                              id={`status-${status}`}
+                              checked={selectedStatus.includes(status)}
+                              onCheckedChange={() => toggleStatus(status)}
+                            />
+                            <label
+                              htmlFor={`status-${status}`}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                            >
+                              {getStatusLabel(status)}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
             </div>
           </div>
 
@@ -213,11 +410,11 @@ export default function AlertsPage() {
             {filteredAlerts.length === 0 ? (
               <EmptyState
                 icon={Bell}
-                title="Nenhum alerta configurado"
-                description="Configure alertas para ser notificado sobre eventos importantes."
+                title="Nenhum alerta encontrado"
+                description="Não há alertas correspondentes aos seus filtros."
                 action={{
                   label: 'Criar Alerta',
-                  onClick: () => {},
+                  onClick: () => handleOpenDialog(),
                 }}
               />
             ) : (
@@ -230,7 +427,9 @@ export default function AlertsPage() {
                       <TableHead>Threshold</TableHead>
                       <TableHead>Severidade</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="w-12 text-center">
+                        <Settings className="h-4 w-4 text-muted-foreground mx-auto" />
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -269,11 +468,11 @@ export default function AlertsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="gap-2">
+                              <DropdownMenuItem className="gap-2" onClick={() => handleOpenDialog(alert)}>
                                 <Edit className="h-4 w-4" />
                                 Editar
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
+                              <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={() => handleDelete(alert.id)}>
                                 <Trash2 className="h-4 w-4" />
                                 Excluir
                               </DropdownMenuItem>
@@ -334,6 +533,122 @@ export default function AlertsPage() {
           </TabsContent>
         </Tabs>
       </motion.div>
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpened}>
+        <DialogContent className="sm:max-w-[425px]">
+          <form onSubmit={handleSubmit}>
+            <DialogHeader>
+              <DialogTitle>{editingAlert ? 'Editar Alerta' : 'Novo Alerta'}</DialogTitle>
+              <DialogDescription>
+                Preencha os dados da regra de alerta abaixo.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="name">Nome</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Nome do alerta"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="description">Descrição</Label>
+                <Input
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Descrição opcional"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="org">Empresa</Label>
+                <Select 
+                  value={String(formData.organization_id)} 
+                  onValueChange={(value) => setFormData({ ...formData, organization_id: parseInt(value) })}
+                >
+                  <SelectTrigger id="org">
+                    <SelectValue placeholder="Selecione a empresa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="-1">Todas Empresas</SelectItem>
+                    {organizations.map((org) => (
+                      <SelectItem key={org.id} value={String(org.id)}>
+                        {org.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="condition">Condição (ex: value &gt; 80)</Label>
+                <Input
+                  id="condition"
+                  value={formData.condition}
+                  onChange={(e) => setFormData({ ...formData, condition: e.target.value })}
+                  placeholder="value > 80"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="threshold">Threshold (Valor Limite)</Label>
+                <Input
+                  id="threshold"
+                  type="number"
+                  value={formData.threshold}
+                  onChange={(e) => setFormData({ ...formData, threshold: parseFloat(e.target.value) })}
+                  placeholder="80"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="severity">Severidade</Label>
+                <Select 
+                  value={formData.severity} 
+                  onValueChange={(value) => setFormData({ ...formData, severity: value })}
+                >
+                  <SelectTrigger id="severity">
+                    <SelectValue placeholder="Selecione a severidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Baixa</SelectItem>
+                    <SelectItem value="medium">Média</SelectItem>
+                    <SelectItem value="high">Alta</SelectItem>
+                    <SelectItem value="critical">Crítica</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="status">Status</Label>
+                <Select 
+                  value={formData.status} 
+                  onValueChange={(value) => setFormData({ ...formData, status: value as any })}
+                >
+                  <SelectTrigger id="status">
+                    <SelectValue placeholder="Selecione o status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Ativo</SelectItem>
+                    <SelectItem value="inactive">Inativo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpened(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editingAlert ? 'Salvar Alterações' : 'Criar Alerta'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

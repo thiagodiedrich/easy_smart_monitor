@@ -10,6 +10,7 @@ interface AuthStore {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  failedAttempts: number;
   
   // Actions
   login: (credentials: LoginRequest) => Promise<void>;
@@ -17,6 +18,7 @@ interface AuthStore {
   fetchUser: () => Promise<void>;
   setTokens: (token: string, refreshToken: string) => void;
   clearError: () => void;
+  resetFailedAttempts: () => void;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -28,6 +30,7 @@ export const useAuthStore = create<AuthStore>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      failedAttempts: 0,
 
       login: async (credentials: LoginRequest) => {
         set({ isLoading: true, error: null });
@@ -43,20 +46,34 @@ export const useAuthStore = create<AuthStore>()(
             isAuthenticated: true,
             isLoading: false,
             error: null,
+            failedAttempts: 0, // Reset on success
           });
         } catch (error: any) {
-          let message = 'Erro ao fazer login. Verifique suas credenciais.';
+          const currentAttempts = (get().failedAttempts || 0) + 1;
+          const remaining = Math.max(0, 5 - currentAttempts);
           
-          if (error.response?.data?.message) {
-            message = error.response.data.message;
-          } else if (error.message) {
-            message = error.message;
+          let customMessage = `Credenciais inválidas. Após ${remaining} tentativa${remaining !== 1 ? 's' : ''} seguida${remaining !== 1 ? 's' : ''}, você ficará bloqueado por 30 minutos.`;
+          
+          if (remaining <= 0) {
+            customMessage = 'Usuário bloqueado por 30 minutos devido a múltiplas tentativas falhas.';
           }
           
+          // Se a API trouxer uma mensagem específica de bloqueio real, respeitamos ela
+          if (error.response?.data?.message) {
+            const apiMsg = error.response.data.message.toLowerCase();
+            if (apiMsg.includes('bloqueado') || apiMsg.includes('muitas tentativas') || apiMsg.includes('lockout')) {
+              customMessage = error.response.data.message;
+            }
+          }
+          
+          console.log('Failed attempt:', currentAttempts, 'Message:', customMessage);
+          
+          // Forçamos o estado a atualizar com a nossa mensagem
           set({
             isLoading: false,
-            error: message,
+            error: customMessage,
             isAuthenticated: false,
+            failedAttempts: currentAttempts,
           });
           
           throw error;
@@ -70,6 +87,7 @@ export const useAuthStore = create<AuthStore>()(
           refreshToken: null,
           isAuthenticated: false,
           error: null,
+          failedAttempts: 0,
         });
         
         // Clear SaaS context on logout
@@ -98,6 +116,10 @@ export const useAuthStore = create<AuthStore>()(
       clearError: () => {
         set({ error: null });
       },
+
+      resetFailedAttempts: () => {
+        set({ failedAttempts: 0 });
+      },
     }),
     {
       name: 'auth-storage',
@@ -106,6 +128,7 @@ export const useAuthStore = create<AuthStore>()(
         refreshToken: state.refreshToken,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        failedAttempts: state.failedAttempts,
       }),
     }
   )

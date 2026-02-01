@@ -11,10 +11,14 @@ import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import OrganizationsPage from "@/pages/OrganizationsPage";
 import WorkspacesPage from "@/pages/WorkspacesPage";
+import EquipmentsPage from "@/pages/EquipmentsPage";
+import SensorsPage from "@/pages/SensorsPage";
 import UsersPage from "@/pages/UsersPage";
 import AlertsPage from "@/pages/AlertsPage";
 import WebhooksPage from "@/pages/WebhooksPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
+import AuditLogsPage from "@/pages/AuditLogsPage";
+import PlansPage from "@/pages/PlansPage";
 import ProfilePage from "@/pages/ProfilePage";
 import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "@/pages/NotFound";
@@ -47,14 +51,18 @@ const App = () => (
             }
           >
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/organizations" element={<OrganizationsPage />} />
-            <Route path="/workspaces" element={<WorkspacesPage />} />
-            <Route path="/users" element={<UsersPage />} />
-            <Route path="/alerts" element={<AlertsPage />} />
-            <Route path="/webhooks" element={<WebhooksPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/organizations" element={<OrganizationsPage />} />
+        <Route path="/workspaces" element={<WorkspacesPage />} />
+        <Route path="/equipments" element={<EquipmentsPage />} />
+        <Route path="/sensors" element={<SensorsPage />} />
+        <Route path="/users" element={<UsersPage />} />
+        <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/webhooks" element={<WebhooksPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/audit-logs" element={<AuditLogsPage />} />
+        <Route path="/plans" element={<PlansPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
           </Route>
           
           {/* Redirects */}

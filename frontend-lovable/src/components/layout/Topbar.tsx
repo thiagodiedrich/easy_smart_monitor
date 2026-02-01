@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Building2,
-  FolderKanban,
-  ChevronDown,
-  User,
-  LogOut,
-  Globe,
-  Check,
+import { 
+  Building2, 
+  FolderKanban, 
+  ChevronDown, 
+  Globe, 
+  Check, 
+  LogOut, 
+  User as UserIcon,
+  Bell,
+  Search,
+  Settings
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSaaSContext } from '@/hooks/useSaaSContext';
@@ -20,33 +23,42 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export function Topbar() {
-  const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const {
-    currentOrganization,
-    currentWorkspace,
-    organizations,
-    workspaces,
-    isGlobalAccess,
+  const { 
+    organizations, 
+    workspaces, 
+    organizationId, 
+    workspaceId,
     selectOrganization,
     selectWorkspace,
     setGlobalAccess,
+    isGlobalAccess
   } = useSaaSContext();
 
   const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
 
+  const currentOrganization = organizations.find(o => o.id === organizationId);
+  const currentWorkspace = workspaces.find(w => w.id === workspaceId);
+
   const handleLogout = () => {
     logout();
-    navigate('/login');
   };
 
   const getInitials = (name: string) => {
+    if (!name) return '??';
     return name
       .split(' ')
       .map((n) => n[0])
@@ -71,14 +83,14 @@ export function Topbar() {
             >
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span className="max-w-[150px] truncate text-sm">
-                {currentOrganization?.name ?? 'Todas Organizations'}
+                {currentOrganization?.name ?? 'Todas Empresas'}
               </span>
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
             <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-              Selecione uma Organization
+              Selecione uma Empresa
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             
@@ -115,7 +127,7 @@ export function Topbar() {
             
             {organizations.length === 0 && (
               <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                Nenhuma organization disponível
+                Nenhuma empresa disponível
               </div>
             )}
           </DropdownMenuContent>
@@ -128,20 +140,20 @@ export function Topbar() {
               variant="outline"
               className={cn(
                 'h-9 gap-2 px-3 border-border',
-                currentWorkspace && 'border-accent/50'
+                currentWorkspace && 'border-primary/50'
               )}
-              disabled={!currentOrganization}
+              disabled={!currentOrganization && !isGlobalAccess}
             >
               <FolderKanban className="h-4 w-4 text-muted-foreground" />
               <span className="max-w-[150px] truncate text-sm">
-                {currentWorkspace?.name ?? 'Todos Workspaces'}
+                {currentWorkspace?.name ?? 'Todos Locais'}
               </span>
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
             <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-              Selecione um Workspace
+              Selecione um Local
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             
@@ -153,10 +165,8 @@ export function Topbar() {
               className="gap-2"
             >
               <FolderKanban className="h-4 w-4" />
-              <span>Todos Workspaces</span>
-              {!currentWorkspace && currentOrganization && (
-                <Check className="h-4 w-4 ml-auto text-accent" />
-              )}
+              <span>Todos Locais</span>
+              {!currentWorkspace && <Check className="h-4 w-4 ml-auto text-primary" />}
             </DropdownMenuItem>
             
             <DropdownMenuSeparator />
@@ -173,65 +183,60 @@ export function Topbar() {
                 <FolderKanban className="h-4 w-4" />
                 <span className="truncate">{ws.name}</span>
                 {currentWorkspace?.id === ws.id && (
-                  <Check className="h-4 w-4 ml-auto text-accent" />
+                  <Check className="h-4 w-4 ml-auto text-primary" />
                 )}
               </DropdownMenuItem>
             ))}
             
             {workspaces.length === 0 && (
               <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                Nenhum workspace disponível
+                Nenhum local disponível
               </div>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* Context Badge */}
-        {isGlobalAccess && (
-          <Badge variant="outline" className="h-6 gap-1 text-xs font-normal">
-            <Globe className="h-3 w-3" />
-            Acesso Global
-          </Badge>
-        )}
       </div>
 
-      {/* User Menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-9 gap-2 px-2">
-            <Avatar className="h-7 w-7">
-              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                {user?.name ? getInitials(user.name) : 'U'}
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-sm font-medium hidden md:inline">
-              {user?.name ?? 'Usuário'}
-            </span>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel className="font-normal">
-            <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium">{user?.name}</p>
-              <p className="text-xs text-muted-foreground">{user?.email}</p>
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => navigate('/profile')} className="gap-2">
-            <User className="h-4 w-4" />
-            Meu Perfil
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={handleLogout}
-            className="gap-2 text-destructive focus:text-destructive"
-          >
-            <LogOut className="h-4 w-4" />
-            Sair
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* User Actions */}
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" className="relative text-muted-foreground">
+          <Bell className="h-5 w-5" />
+          <span className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full border-2 border-topbar" />
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="gap-3 px-2 hover:bg-muted/50">
+              <div className="flex flex-col items-end hidden sm:flex">
+                <span className="text-sm font-medium leading-none">{user?.name}</span>
+                <span className="text-xs text-muted-foreground capitalize">{user?.role}</span>
+              </div>
+              <Avatar className="h-9 w-9 border border-border">
+                <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                  {getInitials(user?.name || '')}
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => window.location.href = '/profile'}>
+              <UserIcon className="h-4 w-4" />
+              Perfil
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => window.location.href = '/settings'}>
+              <Settings className="h-4 w-4" />
+              Configurações
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive cursor-pointer" onClick={handleLogout}>
+              <LogOut className="h-4 w-4" />
+              Sair
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </header>
   );
 }
