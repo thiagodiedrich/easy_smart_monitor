@@ -12,9 +12,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { login, isLoading, error, clearError } = useAuth();
   
-  // Email desativado a pedido do cliente
-  // const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -23,9 +21,7 @@ export default function LoginPage() {
     clearError();
     
     try {
-      // Login via e-mail desativado a pedido do cliente
-      // await login(email, password);
-      await login(username, password);
+      await login(email, password);
       navigate('/dashboard');
     } catch {
       // Error is handled by the store
@@ -115,8 +111,6 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Campo de e-mail desativado a pedido do cliente */}
-            {/*
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
               <Input
@@ -128,21 +122,6 @@ export default function LoginPage() {
                 required
                 className="h-11"
                 autoComplete="email"
-              />
-            </div>
-            */}
-
-            <div className="space-y-2">
-              <Label htmlFor="username">Usuário</Label>
-              <Input
-                id="username"
-                type="text"
-                placeholder="seu_usuario"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                className="h-11"
-                autoComplete="username"
               />
             </div>
 

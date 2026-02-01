@@ -12,7 +12,7 @@ export interface User {
 }
 
 export interface LoginRequest {
-  username: string;
+  email: string;
   password: string;
 }
 
@@ -39,6 +39,9 @@ export interface Organization {
   tenant_id: number;
   name: string;
   description?: string;
+  document?: string;
+  phone?: string;
+  email?: string;
   status: 'active' | 'inactive';
   created_at: string;
   updated_at: string;

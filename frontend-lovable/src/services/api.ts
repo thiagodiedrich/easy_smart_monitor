@@ -76,8 +76,20 @@ api.interceptors.response.use(
         status: error.response?.status,
         url: error.config?.url,
         data: error.response?.data,
+        message: error.message
       });
     }
+
+    // Handle Network Error
+    if (error.message === 'Network Error') {
+      console.error('Network Error detected. Reloading in 5 seconds...');
+      // Usamos um timeout para dar tempo do usuário ver a mensagem se necessário
+      setTimeout(() => {
+        window.location.reload();
+      }, 5000);
+      return Promise.reject(error);
+    }
+
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     // Handle 401 - Unauthorized

@@ -76,8 +76,8 @@ export default function WebhooksPage() {
   };
 
   const filteredWebhooks = webhooks.filter((wh) =>
-    wh.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    wh.url.toLowerCase().includes(searchQuery.toLowerCase())
+    (wh.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    (wh.url?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
   const getStatusBadge = (status: string) => {
@@ -195,14 +195,14 @@ export default function WebhooksPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {wh.events.slice(0, 2).map((event) => (
+                        {(wh.events || []).slice(0, 2).map((event) => (
                           <Badge key={event} variant="outline" className="text-xs">
                             {event}
                           </Badge>
                         ))}
-                        {wh.events.length > 2 && (
+                        {(wh.events || []).length > 2 && (
                           <Badge variant="outline" className="text-xs">
-                            +{wh.events.length - 2}
+                            +{(wh.events || []).length - 2}
                           </Badge>
                         )}
                       </div>

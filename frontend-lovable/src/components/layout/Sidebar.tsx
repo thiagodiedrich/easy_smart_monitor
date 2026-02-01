@@ -25,7 +25,7 @@ interface NavItem {
 }
 
 const mainNav: NavItem[] = [
-  { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { title: 'Painel de Controle', href: '/dashboard', icon: LayoutDashboard },
   { title: 'Organizations', href: '/organizations', icon: Building2 },
   { title: 'Workspaces', href: '/workspaces', icon: FolderKanban },
   { title: 'Usuários', href: '/users', icon: Users },

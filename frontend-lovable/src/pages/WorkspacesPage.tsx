@@ -52,7 +52,7 @@ export default function WorkspacesPage() {
   }, []);
 
   const filteredWorkspaces = workspaces.filter((ws) =>
-    ws.name.toLowerCase().includes(searchQuery.toLowerCase())
+    (ws.name?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
   const getOrganizationName = (orgId: number) => {

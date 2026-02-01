@@ -4,8 +4,8 @@ import { useCallback } from 'react';
 export function useAuth() {
   const store = useAuthStore();
   
-  const login = useCallback(async (username: string, password: string) => {
-    await store.login({ username, password });
+  const login = useCallback(async (email: string, password: string) => {
+    await store.login({ email, password });
   }, [store]);
   
   const logout = useCallback(() => {

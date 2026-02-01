@@ -78,7 +78,7 @@ export default function AlertsPage() {
   };
 
   const filteredAlerts = alerts.filter((alert) =>
-    alert.name.toLowerCase().includes(searchQuery.toLowerCase())
+    (alert.name?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
   const getSeverityBadge = (severity: string) => {

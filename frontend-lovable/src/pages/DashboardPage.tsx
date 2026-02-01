@@ -102,7 +102,7 @@ export default function DashboardPage() {
       {/* Header */}
       <motion.div variants={item} className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <h1 className="text-2xl font-bold">Painel de Controle</h1>
           <p className="text-muted-foreground">
             {isGlobalAccess
               ? 'Visão geral de todos os dispositivos'

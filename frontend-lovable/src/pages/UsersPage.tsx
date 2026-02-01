@@ -71,11 +71,12 @@ export default function UsersPage() {
 
   const filteredUsers = users.filter(
     (user) =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
+      (user.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (user.email?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
   const getInitials = (name: string) => {
+    if (!name) return '??';
     return name
       .split(' ')
       .map((n) => n[0])
