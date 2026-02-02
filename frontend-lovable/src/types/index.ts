@@ -1,14 +1,21 @@
 // User & Auth Types
 export interface User {
-  id: number;
-  uuid: string;
-  tenant_id: number;
-  email: string;
-  name: string;
-  role: string;
-  status: 'active' | 'inactive' | 'pending';
-  created_at: string;
-  updated_at: string;
+  id?: number;
+  user_id?: number;
+  uuid?: string;
+  tenant_id?: number;
+  organization_id?: number | number[];
+  workspace_id?: number | number[];
+  username?: string;
+  email?: string;
+  name?: string;
+  role?: string | number[] | Record<string, unknown>;
+  permissions?: string[];
+  user_type?: 'frontend' | 'device' | string;
+  device_id?: string | null;
+  status?: 'active' | 'inactive' | 'pending' | 'blocked';
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface LoginRequest {
@@ -21,7 +28,7 @@ export interface LoginResponse {
   refresh_token: string;
   token_type: string;
   expires_in: number;
-  user: User;
+  user?: User;
 }
 
 export interface AuthState {
@@ -60,8 +67,10 @@ export interface Workspace {
 }
 
 export interface SaaSContext {
+  tenantId: number;
   organizationId: number;
   workspaceId: number;
+  tenant: Tenant | null;
   organization: Organization | null;
   workspace: Workspace | null;
   isGlobalAccess: boolean;

@@ -59,6 +59,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SkeletonTable } from '@/components/ui/skeleton-card';
 import { useSaaSContext } from '@/hooks/useSaaSContext';
+import { useAuthStore } from '@/stores/authStore';
+import { PermissionButton } from '@/components/auth/PermissionButton';
 import api from '@/services/api';
 import type { Alert, AlertHistory } from '@/types';
 import { toast } from 'sonner';
@@ -80,6 +82,10 @@ type StatusOption = 'active' | 'blocked' | 'inactive';
 
 export default function AlertsPage() {
   const { organizations, fetchOrganizations } = useSaaSContext();
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canCreate = hasPermission('tenant.alerts.create');
+  const canUpdate = hasPermission('tenant.alerts.update');
+  const canDelete = hasPermission('tenant.alerts.delete');
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [history, setHistory] = useState<AlertHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -153,6 +159,10 @@ export default function AlertsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingAlert ? !canUpdate : !canCreate) {
+      toast.error('Você não tem permissão para esta ação.');
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -179,6 +189,10 @@ export default function AlertsPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canDelete) {
+      toast.error('Você não tem permissão para excluir.');
+      return;
+    }
     if (!confirm('Tem certeza que deseja excluir este alerta?')) return;
 
     try {
@@ -279,10 +293,10 @@ export default function AlertsPage() {
             Gerencie regras e histórico de alertas
           </p>
         </div>
-        <Button className="gap-2" onClick={() => handleOpenDialog()}>
+        <PermissionButton className="gap-2" onClick={() => handleOpenDialog()} permission="tenant.alerts.create">
           <Plus className="h-4 w-4" />
           Novo Alerta
-        </Button>
+        </PermissionButton>
       </motion.div>
 
       {/* Stats Cards */}
@@ -412,10 +426,11 @@ export default function AlertsPage() {
                 icon={Bell}
                 title="Nenhum alerta encontrado"
                 description="Não há alertas correspondentes aos seus filtros."
-                action={{
-                  label: 'Criar Alerta',
-                  onClick: () => handleOpenDialog(),
-                }}
+                action={
+                  canCreate
+                    ? { label: 'Criar Alerta', onClick: () => handleOpenDialog() }
+                    : undefined
+                }
               />
             ) : (
               <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -468,11 +483,21 @@ export default function AlertsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="gap-2" onClick={() => handleOpenDialog(alert)}>
+                              <DropdownMenuItem
+                                className="gap-2"
+                                onClick={() => handleOpenDialog(alert)}
+                                disabled={!canUpdate}
+                                title={!canUpdate ? 'Sem permissão' : undefined}
+                              >
                                 <Edit className="h-4 w-4" />
                                 Editar
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={() => handleDelete(alert.id)}>
+                              <DropdownMenuItem
+                                className="gap-2 text-destructive focus:text-destructive"
+                                onClick={() => handleDelete(alert.id)}
+                                disabled={!canDelete}
+                                title={!canDelete ? 'Sem permissão' : undefined}
+                              >
                                 <Trash2 className="h-4 w-4" />
                                 Excluir
                               </DropdownMenuItem>
@@ -641,10 +666,14 @@ export default function AlertsPage() {
               <Button type="button" variant="outline" onClick={() => setIsDialogOpened(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <PermissionButton
+                type="submit"
+                disabled={isSubmitting}
+                permission={editingAlert ? 'tenant.alerts.update' : 'tenant.alerts.create'}
+              >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editingAlert ? 'Salvar Alterações' : 'Criar Alerta'}
-              </Button>
+              </PermissionButton>
             </DialogFooter>
           </form>
         </DialogContent>

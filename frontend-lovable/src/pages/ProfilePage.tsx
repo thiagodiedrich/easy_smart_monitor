@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   User,
@@ -13,12 +13,15 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
+import { PermissionButton } from '@/components/auth/PermissionButton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { useAuthStore } from '@/stores/authStore';
+import api from '@/services/api';
 import { toast } from 'sonner';
 
 const container = {
@@ -35,7 +38,9 @@ const item = {
 };
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, fetchUser } = useAuth();
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canUpdateProfile = hasPermission('auth.me');
   const [isLoading, setIsLoading] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -51,9 +56,21 @@ export default function ProfilePage() {
     confirmPassword: '',
   });
 
+  // Sincroniza dados quando o usuário carregar
+  useEffect(() => {
+    if (user) {
+      setProfileData({
+        name: user.name ?? '',
+        email: user.email ?? '',
+      });
+    }
+  }, [user]);
+
   const getInitials = (name: string) => {
+    if (!name) return 'U';
     return name
       .split(' ')
+      .filter(Boolean)
       .map((n) => n[0])
       .join('')
       .toUpperCase()
@@ -62,14 +79,20 @@ export default function ProfilePage() {
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canUpdateProfile) {
+      toast.error('Você não tem permissão para atualizar o perfil.');
+      return;
+    }
     setIsLoading(true);
     
     try {
-      // API call would go here
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Usamos a rota /auth/me para atualizar dados do usuário logado
+      await api.put('/auth/me', { name: profileData.name });
       toast.success('Perfil atualizado com sucesso!');
-    } catch (error) {
-      toast.error('Erro ao atualizar perfil');
+      await fetchUser(); // Recarrega dados do usuário no store
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      toast.error(error.response?.data?.error || 'Erro ao atualizar perfil');
     } finally {
       setIsLoading(false);
     }
@@ -77,7 +100,6 @@ export default function ProfilePage() {
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       toast.error('As senhas não coincidem');
       return;
@@ -86,12 +108,15 @@ export default function ProfilePage() {
     setIsLoading(true);
     
     try {
-      // API call would go here
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await api.patch('/auth/me/password', {
+        current_password: passwordData.currentPassword,
+        new_password: passwordData.newPassword
+      });
       toast.success('Senha alterada com sucesso!');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (error) {
-      toast.error('Erro ao alterar senha');
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      toast.error(error.response?.data?.error || 'Erro ao alterar senha');
     } finally {
       setIsLoading(false);
     }
@@ -123,12 +148,12 @@ export default function ProfilePage() {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1">
-                <h2 className="text-xl font-semibold">{user?.name}</h2>
-                <p className="text-muted-foreground">{user?.email}</p>
+                <h2 className="text-xl font-semibold">{user?.name || 'Usuário'}</h2>
+                <p className="text-muted-foreground">{user?.email || '—'}</p>
                 <div className="flex items-center gap-3 mt-2">
                   <Badge variant="outline" className="gap-1">
                     <Shield className="h-3 w-3" />
-                    {user?.role ?? 'Usuário'}
+                    {typeof user?.role === 'string' ? user.role : (user?.role as any)?.role || 'Usuário'}
                   </Badge>
                   <Badge variant="outline" className="gap-1 bg-success/10 text-success border-success/20">
                     Ativo
@@ -185,9 +210,6 @@ export default function ProfilePage() {
                       id="email"
                       type="email"
                       value={profileData.email}
-                      onChange={(e) =>
-                        setProfileData({ ...profileData, email: e.target.value })
-                      }
                       className="pl-9"
                       disabled
                     />
@@ -198,14 +220,19 @@ export default function ProfilePage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button type="submit" disabled={isLoading} className="gap-2">
+                <PermissionButton
+                  type="submit"
+                  disabled={isLoading}
+                  className="gap-2"
+                  permission="auth.me"
+                >
                   {isLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
                   Salvar Alterações
-                </Button>
+                </PermissionButton>
               </div>
             </form>
           </CardContent>
@@ -235,6 +262,7 @@ export default function ProfilePage() {
                       setPasswordData({ ...passwordData, currentPassword: e.target.value })
                     }
                     className="pl-9 pr-10"
+                    required
                   />
                   <button
                     type="button"
@@ -265,6 +293,7 @@ export default function ProfilePage() {
                         setPasswordData({ ...passwordData, newPassword: e.target.value })
                       }
                       className="pl-9 pr-10"
+                      required
                     />
                     <button
                       type="button"
@@ -291,20 +320,26 @@ export default function ProfilePage() {
                         setPasswordData({ ...passwordData, confirmPassword: e.target.value })
                       }
                       className="pl-9"
+                      required
                     />
                   </div>
                 </div>
               </div>
 
               <div className="flex justify-end">
-                <Button type="submit" disabled={isLoading} className="gap-2">
+                <PermissionButton
+                  type="submit"
+                  disabled={isLoading}
+                  className="gap-2"
+                  permission="auth.me"
+                >
                   {isLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <KeyRound className="h-4 w-4" />
                   )}
                   Alterar Senha
-                </Button>
+                </PermissionButton>
               </div>
             </form>
           </CardContent>

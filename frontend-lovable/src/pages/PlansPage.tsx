@@ -53,6 +53,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SkeletonTable } from '@/components/ui/skeleton-card';
+import { useAuthStore } from '@/stores/authStore';
+import { PermissionButton } from '@/components/auth/PermissionButton';
 import api from '@/services/api';
 import { toast } from 'sonner';
 
@@ -89,6 +91,9 @@ interface Plan {
 }
 
 export default function PlansPage() {
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canCreate = hasPermission('admin.plans.create');
+  const canUpdate = hasPermission('admin.plans.update');
   const [plans, setPlans] = useState<Plan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -197,6 +202,10 @@ export default function PlansPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingPlan ? !canUpdate : !canCreate) {
+      toast.error('Você não tem permissão para esta ação.');
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -249,10 +258,10 @@ export default function PlansPage() {
           <h1 className="text-2xl font-bold">Planos</h1>
           <p className="text-muted-foreground">Gerencie os planos e limites ({plans.length})</p>
         </div>
-        <Button className="gap-2" onClick={() => handleOpenDialog()}>
+        <PermissionButton className="gap-2" onClick={() => handleOpenDialog()} permission="admin.plans.create">
           <Plus className="h-4 w-4" />
           Novo Plano
-        </Button>
+        </PermissionButton>
       </motion.div>
 
       <motion.div variants={item} className="flex flex-col sm:flex-row items-center gap-4">
@@ -296,7 +305,12 @@ export default function PlansPage() {
 
       <motion.div variants={item}>
         {filteredPlans.length === 0 ? (
-          <EmptyState icon={KeyRound} title="Nenhum plano encontrado" description="Não há planos correspondentes aos seus filtros." action={{ label: 'Criar Plano', onClick: () => handleOpenDialog() }} />
+          <EmptyState
+            icon={KeyRound}
+            title="Nenhum plano encontrado"
+            description="Não há planos correspondentes aos seus filtros."
+            action={canCreate ? { label: 'Criar Plano', onClick: () => handleOpenDialog() } : undefined}
+          />
         ) : (
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             <Table>
@@ -326,7 +340,14 @@ export default function PlansPage() {
                           <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity"><MoreHorizontal className="h-4 w-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="gap-2" onClick={() => handleOpenDialog(plan)}><Edit className="h-4 w-4" /> Editar</DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onClick={() => handleOpenDialog(plan)}
+                            disabled={!canUpdate}
+                            title={!canUpdate ? 'Sem permissão' : undefined}
+                          >
+                            <Edit className="h-4 w-4" /> Editar
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -383,10 +404,14 @@ export default function PlansPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsDialogOpened(false)}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <PermissionButton
+                type="submit"
+                disabled={isSubmitting}
+                permission={editingPlan ? 'admin.plans.update' : 'admin.plans.create'}
+              >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editingPlan ? 'Salvar Alterações' : 'Criar Plano'}
-              </Button>
+              </PermissionButton>
             </DialogFooter>
           </form>
         </DialogContent>

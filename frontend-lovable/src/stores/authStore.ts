@@ -5,10 +5,12 @@ import api from '@/services/api';
 
 interface AuthStore {
   user: User | null;
+  permissions: string[];
   token: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  fetchError: boolean;
   error: string | null;
   failedAttempts: number;
   
@@ -17,6 +19,7 @@ interface AuthStore {
   logout: () => void;
   fetchUser: () => Promise<void>;
   setTokens: (token: string, refreshToken: string) => void;
+  hasPermission: (permission: string) => boolean;
   clearError: () => void;
   resetFailedAttempts: () => void;
 }
@@ -25,22 +28,25 @@ export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
       user: null,
+      permissions: [],
       token: null,
       refreshToken: null,
       isAuthenticated: false,
       isLoading: false,
+      fetchError: false,
       error: null,
       failedAttempts: 0,
 
       login: async (credentials: LoginRequest) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null, fetchError: false });
         
         try {
           const response = await api.post<LoginResponse>('/auth/login', credentials);
           const { access_token, refresh_token, user } = response.data;
           
           set({
-            user,
+            user: user || null,
+            permissions: user?.permissions || [],
             token: access_token,
             refreshToken: refresh_token,
             isAuthenticated: true,
@@ -48,6 +54,10 @@ export const useAuthStore = create<AuthStore>()(
             error: null,
             failedAttempts: 0, // Reset on success
           });
+
+          if (!user) {
+            await get().fetchUser();
+          }
         } catch (error: any) {
           const currentAttempts = (get().failedAttempts || 0) + 1;
           const remaining = Math.max(0, 5 - currentAttempts);
@@ -58,7 +68,6 @@ export const useAuthStore = create<AuthStore>()(
             customMessage = 'Usuário bloqueado por 30 minutos devido a múltiplas tentativas falhas.';
           }
           
-          // Se a API trouxer uma mensagem específica de bloqueio real, respeitamos ela
           if (error.response?.data?.message) {
             const apiMsg = error.response.data.message.toLowerCase();
             if (apiMsg.includes('bloqueado') || apiMsg.includes('muitas tentativas') || apiMsg.includes('lockout')) {
@@ -66,9 +75,6 @@ export const useAuthStore = create<AuthStore>()(
             }
           }
           
-          console.log('Failed attempt:', currentAttempts, 'Message:', customMessage);
-          
-          // Forçamos o estado a atualizar com a nossa mensagem
           set({
             isLoading: false,
             error: customMessage,
@@ -83,14 +89,15 @@ export const useAuthStore = create<AuthStore>()(
       logout: () => {
         set({
           user: null,
+          permissions: [],
           token: null,
           refreshToken: null,
           isAuthenticated: false,
           error: null,
           failedAttempts: 0,
+          fetchError: false,
         });
         
-        // Clear SaaS context on logout
         localStorage.removeItem('saas-context');
       },
 
@@ -98,19 +105,33 @@ export const useAuthStore = create<AuthStore>()(
         const token = get().token;
         if (!token) return;
         
-        set({ isLoading: true });
+        set({ isLoading: true, fetchError: false });
         
         try {
           const response = await api.get<User>('/auth/me');
-          set({ user: response.data, isLoading: false });
+          set({
+            user: response.data,
+            permissions: response.data?.permissions || [],
+            isLoading: false,
+            fetchError: false
+          });
         } catch (error) {
           console.error('Error fetching user:', error);
-          set({ isLoading: false });
+          set({ isLoading: false, fetchError: true });
         }
       },
 
       setTokens: (token: string, refreshToken: string) => {
         set({ token, refreshToken });
+      },
+
+      hasPermission: (permission: string) => {
+        if (!permission) return true;
+        const { permissions } = get();
+        if (permissions.includes('*') || permissions.includes(permission)) {
+          return true;
+        }
+        return permissions.some((allowed) => allowed.endsWith('.*') && permission.startsWith(allowed.slice(0, -1)));
       },
 
       clearError: () => {
@@ -127,6 +148,7 @@ export const useAuthStore = create<AuthStore>()(
         token: state.token,
         refreshToken: state.refreshToken,
         user: state.user,
+        permissions: state.permissions,
         isAuthenticated: state.isAuthenticated,
         failedAttempts: state.failedAttempts,
       }),

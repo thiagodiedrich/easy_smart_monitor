@@ -5,10 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { PermissionRoute } from "@/components/auth/PermissionRoute";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Pages
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
+import TenantsPage from "@/pages/TenantsPage";
 import OrganizationsPage from "@/pages/OrganizationsPage";
 import WorkspacesPage from "@/pages/WorkspacesPage";
 import EquipmentsPage from "@/pages/EquipmentsPage";
@@ -37,41 +40,128 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<LoginPage />} />
-          
-          {/* Protected routes with layout */}
+      <ErrorBoundary>
+        <BrowserRouter>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<LoginPage />} />
+            
+            {/* Protected routes with layout */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route
+                path="/tenants"
+                element={(
+                  <PermissionRoute permission="admin.tenants.read">
+                    <TenantsPage />
+                  </PermissionRoute>
+                )}
+              />
+              <Route
+                path="/organizations"
+            element={(
+              <PermissionRoute permission="tenant.organizations.read">
+                <OrganizationsPage />
+              </PermissionRoute>
+            )}
+          />
           <Route
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/organizations" element={<OrganizationsPage />} />
-        <Route path="/workspaces" element={<WorkspacesPage />} />
-        <Route path="/equipments" element={<EquipmentsPage />} />
-        <Route path="/sensors" element={<SensorsPage />} />
-        <Route path="/users" element={<UsersPage />} />
-        <Route path="/alerts" element={<AlertsPage />} />
-        <Route path="/webhooks" element={<WebhooksPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/audit-logs" element={<AuditLogsPage />} />
-        <Route path="/plans" element={<PlansPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-          </Route>
-          
-          {/* Redirects */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          
-          {/* 404 */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+            path="/workspaces"
+            element={(
+              <PermissionRoute permission="tenant.workspaces.read">
+                <WorkspacesPage />
+              </PermissionRoute>
+            )}
+          />
+          <Route
+            path="/equipments"
+            element={(
+              <PermissionRoute permission="tenant.equipments.read">
+                <EquipmentsPage />
+              </PermissionRoute>
+            )}
+          />
+          <Route
+            path="/sensors"
+            element={(
+              <PermissionRoute permission="tenant.sensors.read">
+                <SensorsPage />
+              </PermissionRoute>
+            )}
+          />
+          <Route
+            path="/users"
+            element={(
+              <PermissionRoute permission="tenant.users.read">
+                <UsersPage />
+              </PermissionRoute>
+            )}
+          />
+          <Route
+            path="/alerts"
+            element={(
+              <PermissionRoute permission="tenant.alerts.read">
+                <AlertsPage />
+              </PermissionRoute>
+            )}
+          />
+          <Route
+            path="/webhooks"
+            element={(
+              <PermissionRoute permission="tenant.webhooks.read">
+                <WebhooksPage />
+              </PermissionRoute>
+            )}
+          />
+          <Route
+            path="/analytics"
+            element={(
+              <PermissionRoute permission="analytics.read">
+                <AnalyticsPage />
+              </PermissionRoute>
+            )}
+          />
+          <Route
+            path="/audit-logs"
+            element={(
+              <PermissionRoute permission="admin.audit.read">
+                <AuditLogsPage />
+              </PermissionRoute>
+            )}
+          />
+          <Route
+            path="/plans"
+            element={(
+              <PermissionRoute permission="admin.plans.read">
+                <PlansPage />
+              </PermissionRoute>
+            )}
+          />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route
+            path="/settings"
+            element={(
+              <PermissionRoute permission="admin.settings.read">
+                <SettingsPage />
+              </PermissionRoute>
+            )}
+          />
+            </Route>
+            
+            {/* Redirects */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            
+            {/* 404 */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </ErrorBoundary>
     </TooltipProvider>
   </QueryClientProvider>
 );

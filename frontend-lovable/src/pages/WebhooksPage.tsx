@@ -57,6 +57,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from '@/components/ui/empty-state';
 import { SkeletonTable } from '@/components/ui/skeleton-card';
 import { useSaaSContext } from '@/hooks/useSaaSContext';
+import { useAuthStore } from '@/stores/authStore';
+import { PermissionButton } from '@/components/auth/PermissionButton';
 import api from '@/services/api';
 import type { Webhook as WebhookType } from '@/types';
 import { toast } from 'sonner';
@@ -78,6 +80,10 @@ type StatusOption = 'active' | 'blocked' | 'inactive';
 
 export default function WebhooksPage() {
   const { organizations, fetchOrganizations } = useSaaSContext();
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canCreate = hasPermission('tenant.webhooks.create');
+  const canUpdate = hasPermission('tenant.webhooks.update');
+  const canDelete = hasPermission('tenant.webhooks.delete');
   const [webhooks, setWebhooks] = useState<WebhookType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,6 +155,10 @@ export default function WebhooksPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingWebhook ? !canUpdate : !canCreate) {
+      toast.error('Você não tem permissão para esta ação.');
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -175,6 +185,10 @@ export default function WebhooksPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canDelete) {
+      toast.error('Você não tem permissão para excluir.');
+      return;
+    }
     if (!confirm('Tem certeza que deseja excluir este webhook?')) return;
 
     try {
@@ -264,10 +278,10 @@ export default function WebhooksPage() {
             Gerencie integrações via webhook ({webhooks.length})
           </p>
         </div>
-        <Button className="gap-2" onClick={() => handleOpenDialog()}>
+        <PermissionButton className="gap-2" onClick={() => handleOpenDialog()} permission="tenant.webhooks.create">
           <Plus className="h-4 w-4" />
           Novo Webhook
-        </Button>
+        </PermissionButton>
       </motion.div>
 
       {/* Search and Filter */}
@@ -340,10 +354,11 @@ export default function WebhooksPage() {
             icon={Webhook}
             title="Nenhum webhook encontrado"
             description="Não há webhooks correspondentes aos seus filtros."
-            action={{
-              label: 'Criar Webhook',
-              onClick: () => handleOpenDialog(),
-            }}
+            action={
+              canCreate
+                ? { label: 'Criar Webhook', onClick: () => handleOpenDialog() }
+                : undefined
+            }
           />
         ) : (
           <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -416,11 +431,21 @@ export default function WebhooksPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="gap-2" onClick={() => handleOpenDialog(wh)}>
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onClick={() => handleOpenDialog(wh)}
+                            disabled={!canUpdate}
+                            title={!canUpdate ? 'Sem permissão' : undefined}
+                          >
                             <Edit className="h-4 w-4" />
                             Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive" onClick={() => handleDelete(wh.id)}>
+                          <DropdownMenuItem
+                            className="gap-2 text-destructive focus:text-destructive"
+                            onClick={() => handleDelete(wh.id)}
+                            disabled={!canDelete}
+                            title={!canDelete ? 'Sem permissão' : undefined}
+                          >
                             <Trash2 className="h-4 w-4" />
                             Excluir
                           </DropdownMenuItem>
@@ -505,10 +530,14 @@ export default function WebhooksPage() {
               <Button type="button" variant="outline" onClick={() => setIsDialogOpened(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <PermissionButton
+                type="submit"
+                disabled={isSubmitting}
+                permission={editingWebhook ? 'tenant.webhooks.update' : 'tenant.webhooks.create'}
+              >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editingWebhook ? 'Salvar Alterações' : 'Criar Webhook'}
-              </Button>
+              </PermissionButton>
             </DialogFooter>
           </form>
         </DialogContent>

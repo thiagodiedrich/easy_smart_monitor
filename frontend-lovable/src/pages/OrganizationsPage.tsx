@@ -11,6 +11,7 @@ import {
   Filter,
   ChevronDown,
   Settings,
+  Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,9 +55,12 @@ import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SkeletonTable } from '@/components/ui/skeleton-card';
 import { useSaaSContext } from '@/hooks/useSaaSContext';
+import { useAuthStore } from '@/stores/authStore';
+import { PermissionButton } from '@/components/auth/PermissionButton';
 import api from '@/services/api';
 import type { Organization } from '@/types';
 import { toast } from 'sonner';
+import { devDebug } from '@/lib/logger';
 
 const container = {
   hidden: { opacity: 0 },
@@ -74,13 +78,53 @@ const item = {
 type StatusOption = 'active' | 'blocked' | 'inactive';
 
 export default function OrganizationsPage() {
-  const { organizations, isLoading, fetchOrganizations } = useSaaSContext();
+  const { organizations, isLoading, fetchOrganizations, tenants, fetchTenants } = useSaaSContext();
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const currentUser = useAuthStore((state) => state.user);
+  const canCreate = hasPermission('tenant.organizations.create');
+  const canUpdate = hasPermission('tenant.organizations.update');
+  const canDelete = hasPermission('tenant.organizations.delete');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<StatusOption[]>(['active', 'blocked']);
   const [isDialogOpen, setIsDialogOpened] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   
+  const fallbackTenantIds = Array.isArray(currentUser?.tenant_id)
+    ? currentUser?.tenant_id
+    : currentUser?.tenant_id !== undefined && currentUser?.tenant_id !== null
+      ? [Number(currentUser.tenant_id)]
+      : [];
+
+  const fallbackTenants = fallbackTenantIds
+    .filter((id) => Number.isFinite(Number(id)) && Number(id) > 0)
+    .map((id) => ({
+      id: Number(id),
+      uuid: String(id),
+      name: `Tenant ${id}`,
+      slug: `tenant-${id}`,
+      plan_code: '',
+      status: 'active' as const,
+      created_at: '',
+      updated_at: '',
+    }));
+
+  const tenantOptions = tenants.length > 0 ? tenants : fallbackTenants;
+  const hasMultipleTenants = tenantOptions.length > 1;
+  const isSuperUser = (() => {
+    const role = currentUser?.role as any;
+    if (Array.isArray(role)) return role.includes(0) || role.includes('0');
+    if (role && typeof role === 'object') return role[0] === true || role['0'] === true || role.super === true;
+    return false;
+  })();
+  const resolveTenantId = () => {
+    if (formData.tenant_id === 0 && isSuperUser) return 0;
+    if (formData.tenant_id > 0) return formData.tenant_id;
+    if (tenantOptions.length === 1) return tenantOptions[0].id;
+    if (fallbackTenantIds.length === 1 && fallbackTenantIds[0] > 0) return fallbackTenantIds[0];
+    return null;
+  };
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -88,11 +132,19 @@ export default function OrganizationsPage() {
     phone: '',
     document: '',
     status: 'active' as StatusOption,
+    tenant_id: -1,
   });
 
   useEffect(() => {
     fetchOrganizations();
+    fetchTenants();
   }, []);
+
+  useEffect(() => {
+    if (formData.tenant_id === -1 && tenantOptions.length === 1) {
+      setFormData((prev) => ({ ...prev, tenant_id: tenantOptions[0].id }));
+    }
+  }, [tenantOptions, formData.tenant_id]);
 
   const toggleStatus = (status: StatusOption) => {
     setSelectedStatus(prev => 
@@ -113,9 +165,7 @@ export default function OrganizationsPage() {
       (org.status?.toLowerCase() || '').includes(searchLower);
 
     // 2. Filtro de Status (ListBox Multi-seleção)
-    // Se nenhum status estiver selecionado, não exibe nada
     if (selectedStatus.length === 0) return false;
-    
     const matchesStatus = selectedStatus.includes(org.status as StatusOption);
 
     return matchesSearch && matchesStatus;
@@ -130,15 +180,19 @@ export default function OrganizationsPage() {
         phone: org.phone || '',
         document: org.document || '',
         status: (org.status as StatusOption) || 'active',
+        tenant_id: org.tenant_id || (tenantOptions.length === 1 ? tenantOptions[0].id : (fallbackTenantIds.length === 1 ? fallbackTenantIds[0] : -1)),
       });
     } else {
       setEditingOrg(null);
+      // Se tiver apenas um tenant, já seleciona ele
+      const defaultTenantId = tenantOptions.length === 1 ? tenantOptions[0].id : (fallbackTenantIds.length === 1 ? fallbackTenantIds[0] : -1);
       setFormData({
         name: '',
         email: '',
         phone: '',
         document: '',
         status: 'active',
+        tenant_id: defaultTenantId,
       });
     }
     setIsDialogOpened(true);
@@ -146,15 +200,37 @@ export default function OrganizationsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingOrg ? !canUpdate : !canCreate) {
+      toast.error('Você não tem permissão para esta ação.');
+      return;
+    }
+
+    const resolvedTenantId = resolveTenantId();
+    if (resolvedTenantId === null) {
+      toast.error('Selecione um tenant');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
+      const payload = {
+        ...formData,
+        tenant_id: resolvedTenantId,
+      };
+      devDebug('[OrganizationsPage][submit]', {
+        editing: Boolean(editingOrg),
+        formTenantId: formData.tenant_id,
+        resolvedTenantId,
+        tenantOptions,
+      });
+
       if (editingOrg) {
-        await api.put(`/tenant/organizations/${editingOrg.id}`, formData);
+        await api.put(`/tenant/organizations/${editingOrg.id}`, payload);
         toast.success('Empresa atualizada com sucesso!');
       } else {
-        await api.post('/tenant/organizations', formData);
-        toast.success('Empresa criada com sucesso!');
+        await api.post('/tenant/organizations', payload);
+        toast.success('Empresa e usuário administrador criados com sucesso!');
       }
       setIsDialogOpened(false);
       fetchOrganizations();
@@ -168,6 +244,10 @@ export default function OrganizationsPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canDelete) {
+      toast.error('Você não tem permissão para excluir.');
+      return;
+    }
     if (!confirm('Tem certeza que deseja excluir esta empresa?')) return;
 
     try {
@@ -231,10 +311,14 @@ export default function OrganizationsPage() {
             Gerencie suas empresas ({organizations.length})
           </p>
         </div>
-        <Button className="gap-2" onClick={() => handleOpenDialog()}>
+        <PermissionButton
+          className="gap-2"
+          onClick={() => handleOpenDialog()}
+          permission="tenant.organizations.create"
+        >
           <Plus className="h-4 w-4" />
           Nova Empresa
-        </Button>
+        </PermissionButton>
       </motion.div>
 
       {/* Search and Filter */}
@@ -307,10 +391,11 @@ export default function OrganizationsPage() {
             icon={Building2}
             title="Nenhuma empresa encontrada"
             description="Não há empresas correspondentes aos seus filtros ou você ainda não criou nenhuma."
-            action={{
-              label: 'Criar Empresa',
-              onClick: () => handleOpenDialog(),
-            }}
+            action={
+              canCreate
+                ? { label: 'Criar Empresa', onClick: () => handleOpenDialog() }
+                : undefined
+            }
           />
         ) : (
           <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -363,13 +448,20 @@ export default function OrganizationsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="gap-2" onClick={() => handleOpenDialog(org)}>
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onClick={() => handleOpenDialog(org)}
+                            disabled={!canUpdate}
+                            title={!canUpdate ? 'Sem permissão' : undefined}
+                          >
                             <Edit className="h-4 w-4" />
                             Editar
                           </DropdownMenuItem>
                           <DropdownMenuItem 
                             className="gap-2 text-destructive focus:text-destructive"
                             onClick={() => handleDelete(org.id)}
+                            disabled={!canDelete}
+                            title={!canDelete ? 'Sem permissão' : undefined}
                           >
                             <Trash2 className="h-4 w-4" />
                             Excluir
@@ -392,10 +484,32 @@ export default function OrganizationsPage() {
             <DialogHeader>
               <DialogTitle>{editingOrg ? 'Editar Empresa' : 'Nova Empresa'}</DialogTitle>
               <DialogDescription>
-                Preencha os dados da empresa abaixo.
+                Preencha os dados da empresa abaixo. Ao criar, um usuário administrador será gerado automaticamente.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+              {/* Seletor de Tenant */}
+              <div className="grid gap-2">
+                <Label htmlFor="tenant">Tenant</Label>
+                <Select
+                  value={String(formData.tenant_id)}
+                  onValueChange={(value) => setFormData({ ...formData, tenant_id: parseInt(value, 10) })}
+                >
+                  <SelectTrigger id="tenant">
+                    <Globe className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Selecione o tenant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="-1" disabled>Selecione o tenant</SelectItem>
+                    {tenantOptions.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="grid gap-2">
                 <Label htmlFor="name">Nome</Label>
                 <Input
@@ -455,10 +569,14 @@ export default function OrganizationsPage() {
               <Button type="button" variant="outline" onClick={() => setIsDialogOpened(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <PermissionButton
+                type="submit"
+                disabled={isSubmitting}
+                permission={editingOrg ? 'tenant.organizations.update' : 'tenant.organizations.create'}
+              >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editingOrg ? 'Salvar Alterações' : 'Criar Empresa'}
-              </Button>
+              </PermissionButton>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -55,9 +55,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from '@/components/ui/empty-state';
 import { SkeletonTable } from '@/components/ui/skeleton-card';
 import { useSaaSContext } from '@/hooks/useSaaSContext';
+import { useAuthStore } from '@/stores/authStore';
+import { PermissionButton } from '@/components/auth/PermissionButton';
 import api from '@/services/api';
 import type { Workspace } from '@/types';
 import { toast } from 'sonner';
+import { devLog } from '@/lib/logger';
 
 const container = {
   hidden: { opacity: 0 },
@@ -75,7 +78,12 @@ const item = {
 type StatusOption = 'active' | 'blocked' | 'inactive';
 
 export default function WorkspacesPage() {
-  const { workspaces, organizations, isLoading, fetchWorkspaces, currentOrganization } = useSaaSContext();
+  const { workspaces, organizations, isLoading, fetchWorkspaces, currentOrganization, fetchOrganizations } = useSaaSContext();
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canCreate = hasPermission('tenant.workspaces.create');
+  const canUpdate = hasPermission('tenant.workspaces.update');
+  const canDelete = hasPermission('tenant.workspaces.delete');
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<StatusOption[]>(['active', 'blocked']);
   const [isDialogOpen, setIsDialogOpened] = useState(false);
@@ -92,6 +100,7 @@ export default function WorkspacesPage() {
 
   useEffect(() => {
     fetchWorkspaces();
+    fetchOrganizations();
   }, []);
 
   const handleOpenDialog = (ws?: Workspace) => {
@@ -105,10 +114,12 @@ export default function WorkspacesPage() {
       });
     } else {
       setEditingWorkspace(null);
+      // Se tiver apenas uma empresa, já seleciona ela
+      const defaultOrgId = organizations.length === 1 ? organizations[0].id : -1;
       setFormData({
         name: '',
         description: '',
-        organization_id: -1, // Usamos -1 para indicar "nenhuma selecionada"
+        organization_id: defaultOrgId,
         status: 'active',
       });
     }
@@ -117,8 +128,6 @@ export default function WorkspacesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Submitting workspace form data:', formData);
-    
     if (formData.organization_id === -1) {
       toast.error('Selecione uma empresa');
       return;
@@ -130,22 +139,18 @@ export default function WorkspacesPage() {
         ...formData,
         organization_id: Number(formData.organization_id)
       };
-      
-      console.log('Sending payload to API:', payload);
 
       if (editingWorkspace) {
-        // Na edição, a API espera apenas os campos que mudaram ou o conjunto permitido
-        // Algumas APIs ignoram o organization_id no PUT se ele for parte da chave
         await api.put(`/tenant/workspaces/${editingWorkspace.id}`, {
           name: payload.name,
           description: payload.description,
           status: payload.status,
-          organization_id: payload.organization_id // Enviando explicitamente
+          organization_id: payload.organization_id
         });
         toast.success('Local atualizado com sucesso!');
       } else {
         await api.post('/tenant/workspaces', payload);
-        toast.success('Local criado com sucesso!');
+        toast.success('Local e usuário administrador criados com sucesso!');
       }
       setIsDialogOpened(false);
       fetchWorkspaces();
@@ -158,6 +163,10 @@ export default function WorkspacesPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canDelete) {
+      toast.error('Sem permissão para excluir.');
+      return;
+    }
     if (!confirm('Tem certeza que deseja excluir este local?')) return;
 
     try {
@@ -184,7 +193,6 @@ export default function WorkspacesPage() {
   };
 
   const filteredWorkspaces = workspaces.filter((ws) => {
-    // 1. Busca Global
     const searchLower = searchQuery.toLowerCase();
     const orgName = getOrganizationName(ws.organization_id).toLowerCase();
     const matchesSearch = 
@@ -193,9 +201,7 @@ export default function WorkspacesPage() {
       orgName.includes(searchLower) ||
       (ws.status?.toLowerCase() || '').includes(searchLower);
 
-    // 2. Filtro de Status
     if (selectedStatus.length === 0) return false;
-    // Workspaces podem não ter status 'blocked' no banco, mas tratamos para consistência da UI
     const matchesStatus = selectedStatus.includes(ws.status as StatusOption);
 
     return matchesSearch && matchesStatus;
@@ -243,7 +249,6 @@ export default function WorkspacesPage() {
       animate="show"
       className="space-y-6"
     >
-      {/* Header */}
       <motion.div variants={item} className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Locais</h1>
@@ -252,13 +257,16 @@ export default function WorkspacesPage() {
             {currentOrganization && ` em ${currentOrganization.name}`}
           </p>
         </div>
-        <Button className="gap-2" onClick={() => handleOpenDialog()}>
+        <PermissionButton
+          className="gap-2"
+          onClick={() => handleOpenDialog()}
+          permission="tenant.workspaces.create"
+        >
           <Plus className="h-4 w-4" />
           Novo Local
-        </Button>
+        </PermissionButton>
       </motion.div>
 
-      {/* Search and Filter */}
       <motion.div variants={item} className="flex flex-col sm:flex-row items-center gap-4">
         <div className="relative flex-1 w-full sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -321,17 +329,17 @@ export default function WorkspacesPage() {
         </div>
       </motion.div>
 
-      {/* Table */}
       <motion.div variants={item}>
         {filteredWorkspaces.length === 0 ? (
           <EmptyState
             icon={FolderKanban}
             title="Nenhum local encontrado"
             description="Não há locais correspondentes aos seus filtros."
-            action={{
-              label: 'Criar Local',
-              onClick: () => handleOpenDialog(),
-            }}
+            action={
+              canCreate
+                ? { label: 'Criar Local', onClick: () => handleOpenDialog() }
+                : undefined
+            }
           />
         ) : (
           <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -384,13 +392,20 @@ export default function WorkspacesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="gap-2" onClick={() => handleOpenDialog(ws)}>
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onClick={() => handleOpenDialog(ws)}
+                            disabled={!canUpdate}
+                            title={!canUpdate ? 'Sem permissão' : undefined}
+                          >
                             <Edit className="h-4 w-4" />
                             Editar
                           </DropdownMenuItem>
                           <DropdownMenuItem 
                             className="gap-2 text-destructive focus:text-destructive"
                             onClick={() => handleDelete(ws.id)}
+                            disabled={!canDelete}
+                            title={!canDelete ? 'Sem permissão' : undefined}
                           >
                             <Trash2 className="h-4 w-4" />
                             Excluir
@@ -413,7 +428,7 @@ export default function WorkspacesPage() {
             <DialogHeader>
               <DialogTitle>{editingWorkspace ? 'Editar Empresa' : 'Novo Local'}</DialogTitle>
               <DialogDescription>
-                Preencha os dados do local abaixo.
+                Preencha os dados do local abaixo. Ao criar, um usuário administrador será gerado automaticamente.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -430,9 +445,9 @@ export default function WorkspacesPage() {
               <div className="grid gap-2">
                 <Label htmlFor="org">Empresa</Label>
                 <Select 
-                  value={String(formData.organization_id)} 
+                  value={formData.organization_id !== -1 ? String(formData.organization_id) : ""} 
                   onValueChange={(value) => {
-                    console.log('Selected org value:', value);
+                    devLog('Selected org value:', value);
                     setFormData({ ...formData, organization_id: parseInt(value) });
                   }}
                 >
@@ -440,7 +455,7 @@ export default function WorkspacesPage() {
                     <SelectValue placeholder="Selecione a empresa" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="-1">Selecione a empresa</SelectItem>
+                    {organizations.length > 1 && <SelectItem value="-1">Selecione a empresa</SelectItem>}
                     {organizations.map((org) => (
                       <SelectItem key={org.id} value={String(org.id)}>
                         {org.name}
@@ -479,10 +494,14 @@ export default function WorkspacesPage() {
               <Button type="button" variant="outline" onClick={() => setIsDialogOpened(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <PermissionButton
+                type="submit"
+                disabled={isSubmitting}
+                permission={editingWorkspace ? 'tenant.workspaces.update' : 'tenant.workspaces.create'}
+              >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editingWorkspace ? 'Salvar Alterações' : 'Criar Local'}
-              </Button>
+              </PermissionButton>
             </DialogFooter>
           </form>
         </DialogContent>

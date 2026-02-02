@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Building2, 
@@ -37,21 +37,44 @@ import { cn } from '@/lib/utils';
 export function Topbar() {
   const { user, logout } = useAuth();
   const { 
+    tenants,
     organizations, 
     workspaces, 
+    tenantId,
     organizationId, 
     workspaceId,
+    selectTenant,
     selectOrganization,
     selectWorkspace,
     setGlobalAccess,
-    isGlobalAccess
+    isGlobalAccess,
+    fetchTenants
   } = useSaaSContext();
 
+  const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false);
   const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
 
+  const currentTenant = tenants.find(t => t.id === tenantId);
   const currentOrganization = organizations.find(o => o.id === organizationId);
   const currentWorkspace = workspaces.find(w => w.id === workspaceId);
+
+  // Verifica se o usuário tem acesso a múltiplos tenants ou é superuser
+  const userTenants = Array.isArray(user?.tenant_id) ? user.tenant_id : [user?.tenant_id];
+  const hasMultipleTenants = userTenants.length > 1 || userTenants.includes(0);
+
+  // Se tiver múltiplos tenants e nenhum selecionado (ID 0), traz "Todos Tenants" selecionado
+  const showAllTenants = hasMultipleTenants && tenantId === 0;
+  // Se tiver múltiplas empresas e nenhuma selecionada, traz "Todas Empresas" selecionado
+  const showAllOrgs = organizations.length > 1 && organizationId === 0;
+  // Se tiver múltiplos locais e nenhum selecionado, traz "Todos Locais" selecionado
+  const showAllWorkspaces = workspaces.length > 1 && workspaceId === 0;
+
+  useEffect(() => {
+    if (hasMultipleTenants) {
+      fetchTenants();
+    }
+  }, [hasMultipleTenants, fetchTenants]);
 
   const handleLogout = () => {
     logout();
@@ -71,6 +94,64 @@ export function Topbar() {
     <header className="h-16 bg-topbar border-b border-topbar-border flex items-center justify-between px-6">
       {/* Context Selectors */}
       <div className="flex items-center gap-3">
+        {/* Tenant Selector */}
+        {hasMultipleTenants && (
+          <DropdownMenu open={tenantDropdownOpen} onOpenChange={setTenantDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                'h-9 gap-2 px-3 border-border',
+                (currentTenant || showAllTenants) && 'border-primary/50'
+              )}
+            >
+              <Globe className="h-4 w-4 text-muted-foreground" />
+              <span className="max-w-[150px] truncate text-sm">
+                {currentTenant?.name ?? (showAllTenants ? 'Todos Tenants' : 'Todos Tenants')}
+              </span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                Selecione um Tenant
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              
+              <DropdownMenuItem
+                onClick={() => {
+                  selectTenant(null);
+                  setTenantDropdownOpen(false);
+                }}
+                className="gap-2"
+              >
+                <Globe className="h-4 w-4" />
+                <span>Todos Tenants</span>
+                {tenantId === 0 && <Check className="h-4 w-4 ml-auto text-primary" />}
+              </DropdownMenuItem>
+              
+              <DropdownMenuSeparator />
+              
+              {tenants.map((t) => (
+                <DropdownMenuItem
+                  key={t.id}
+                  onClick={() => {
+                    selectTenant(t);
+                    setTenantDropdownOpen(false);
+                  }}
+                  className="gap-2"
+                >
+                  <Globe className="h-4 w-4 text-muted-foreground" />
+                  <span className="truncate">{t.name}</span>
+                  {tenantId === t.id && (
+                    <Check className="h-4 w-4 ml-auto text-primary" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         {/* Organization Selector */}
         <DropdownMenu open={orgDropdownOpen} onOpenChange={setOrgDropdownOpen}>
           <DropdownMenuTrigger asChild>
@@ -78,12 +159,12 @@ export function Topbar() {
               variant="outline"
               className={cn(
                 'h-9 gap-2 px-3 border-border',
-                currentOrganization && 'border-accent/50'
+                (currentOrganization || showAllOrgs) && 'border-accent/50'
               )}
             >
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span className="max-w-[150px] truncate text-sm">
-                {currentOrganization?.name ?? 'Todas Empresas'}
+                {currentOrganization?.name ?? (showAllOrgs ? 'Todas Empresas' : 'Todas Empresas')}
               </span>
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </Button>
@@ -96,14 +177,14 @@ export function Topbar() {
             
             <DropdownMenuItem
               onClick={() => {
-                setGlobalAccess();
+                selectOrganization(null);
                 setOrgDropdownOpen(false);
               }}
               className="gap-2"
             >
-              <Globe className="h-4 w-4" />
-              <span>Acesso Global</span>
-              {isGlobalAccess && <Check className="h-4 w-4 ml-auto text-accent" />}
+              <Building2 className="h-4 w-4" />
+              <span>Todas Empresas</span>
+              {organizationId === 0 && <Check className="h-4 w-4 ml-auto text-accent" />}
             </DropdownMenuItem>
             
             <DropdownMenuSeparator />
@@ -140,13 +221,13 @@ export function Topbar() {
               variant="outline"
               className={cn(
                 'h-9 gap-2 px-3 border-border',
-                currentWorkspace && 'border-primary/50'
+                (currentWorkspace || showAllWorkspaces) && 'border-primary/50'
               )}
-              disabled={!currentOrganization && !isGlobalAccess}
+              disabled={!currentOrganization && organizationId !== 0}
             >
               <FolderKanban className="h-4 w-4 text-muted-foreground" />
               <span className="max-w-[150px] truncate text-sm">
-                {currentWorkspace?.name ?? 'Todos Locais'}
+                {currentWorkspace?.name ?? (showAllWorkspaces ? 'Todos Locais' : 'Todos Locais')}
               </span>
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </Button>
@@ -166,7 +247,7 @@ export function Topbar() {
             >
               <FolderKanban className="h-4 w-4" />
               <span>Todos Locais</span>
-              {!currentWorkspace && <Check className="h-4 w-4 ml-auto text-primary" />}
+              {workspaceId === 0 && <Check className="h-4 w-4 ml-auto text-primary" />}
             </DropdownMenuItem>
             
             <DropdownMenuSeparator />

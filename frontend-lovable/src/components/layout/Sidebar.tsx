@@ -1,38 +1,46 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Building2, FolderKanban, Users, Bell, Webhook, Activity, Settings, ChevronLeft, ChevronRight, Cpu, Clock, KeyRound, Gauge } from 'lucide-react';
+import { LayoutDashboard, Building2, FolderKanban, Users, Bell, Webhook, Activity, Settings, ChevronLeft, ChevronRight, Cpu, Clock, KeyRound, Gauge, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NavItem {
   title: string;
   href: string;
   icon: React.ElementType;
+  permission?: string;
 }
 
 const mainNav: NavItem[] = [
   { title: 'Painel de Controle', href: '/dashboard', icon: LayoutDashboard },
-  { title: 'Empresas', href: '/organizations', icon: Building2 },
-  { title: 'Locais', href: '/workspaces', icon: FolderKanban },
-  { title: 'Equipamentos', href: '/equipments', icon: Cpu },
-  { title: 'Sensores', href: '/sensors', icon: Gauge },
-  { title: 'Usuários', href: '/users', icon: Users },
-  { title: 'Alertas', href: '/alerts', icon: Bell },
-  { title: 'Webhooks', href: '/webhooks', icon: Webhook },
-  { title: 'Relatórios', href: '/analytics', icon: Activity },
-  { title: 'Auditoria', href: '/audit-logs', icon: Clock },
+  { title: 'Tenants', href: '/tenants', icon: Globe, permission: 'admin.tenants.read' },
+  { title: 'Empresas', href: '/organizations', icon: Building2, permission: 'tenant.organizations.read' },
+  { title: 'Locais', href: '/workspaces', icon: FolderKanban, permission: 'tenant.workspaces.read' },
+  { title: 'Equipamentos', href: '/equipments', icon: Cpu, permission: 'tenant.equipments.read' },
+  { title: 'Sensores', href: '/sensors', icon: Gauge, permission: 'tenant.sensors.read' },
+  { title: 'Usuários', href: '/users', icon: Users, permission: 'tenant.users.read' },
+  { title: 'Alertas', href: '/alerts', icon: Bell, permission: 'tenant.alerts.read' },
+  { title: 'Webhooks', href: '/webhooks', icon: Webhook, permission: 'tenant.webhooks.read' },
+  { title: 'Relatórios', href: '/analytics', icon: Activity, permission: 'analytics.read' },
+  { title: 'Auditoria', href: '/audit-logs', icon: Clock, permission: 'admin.audit.read' },
 ];
 
 const settingsNav: NavItem[] = [
-  { title: 'Planos', href: '/plans', icon: KeyRound },
-  { title: 'Configurações', href: '/settings', icon: Settings },
+  { title: 'Planos', href: '/plans', icon: KeyRound, permission: 'admin.plans.read' },
+  { title: 'Configurações', href: '/settings', icon: Settings, permission: 'admin.settings.read' },
 ];
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { checkAccess } = usePermissions();
+  
+  // Filtra os menus baseado nas permissões do usuário
+  const filteredMainNav = mainNav.filter((item) => checkAccess(item.permission));
+  const filteredSettingsNav = settingsNav.filter((item) => checkAccess(item.permission));
 
   const NavItemComponent = ({ item, isCollapsed }: { item: NavItem; isCollapsed: boolean }) => {
     const isActive = location.pathname === item.href;
@@ -123,7 +131,7 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         <div className="space-y-1">
-          {mainNav.map((item) => (
+          {filteredMainNav.map((item) => (
             <div key={item.href} className="relative">
               <NavItemComponent item={item} isCollapsed={collapsed} />
             </div>
@@ -131,7 +139,7 @@ export function Sidebar() {
         </div>
 
         <div className="pt-4 mt-4 border-t border-sidebar-border space-y-1">
-          {settingsNav.map((item) => (
+          {filteredSettingsNav.map((item) => (
             <div key={item.href} className="relative">
               <NavItemComponent item={item} isCollapsed={collapsed} />
             </div>

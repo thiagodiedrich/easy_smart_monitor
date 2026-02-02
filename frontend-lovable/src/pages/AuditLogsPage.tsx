@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SkeletonTable } from '@/components/ui/skeleton-card';
+import { PermissionButton } from '@/components/auth/PermissionButton';
+import { useAuthStore } from '@/stores/authStore';
 import api from '@/services/api';
 
 const container = {
@@ -54,6 +56,7 @@ interface AuditLog {
 }
 
 export default function AuditLogsPage() {
+  const hasPermission = useAuthStore((state) => state.hasPermission);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,7 +104,9 @@ export default function AuditLogsPage() {
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Logs de Auditoria</h1>
-        <Button variant="outline" onClick={fetchLogs} className="gap-2"><Activity className="h-4 w-4" /> Atualizar</Button>
+        <PermissionButton variant="outline" onClick={fetchLogs} className="gap-2" permission="admin.audit.read">
+          <Activity className="h-4 w-4" /> Atualizar
+        </PermissionButton>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">

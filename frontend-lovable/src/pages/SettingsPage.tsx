@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { useAuthStore } from '@/stores/authStore';
 
 const container = {
   hidden: { opacity: 0 },
@@ -19,6 +20,8 @@ const item = {
 };
 
 export default function SettingsPage() {
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canUpdateSettings = hasPermission('admin.settings.read');
   return (
     <motion.div
       variants={container}
@@ -56,7 +59,7 @@ export default function SettingsPage() {
                   Receba alertas críticos por e-mail
                 </p>
               </div>
-              <Switch id="email-alerts" defaultChecked />
+              <Switch id="email-alerts" defaultChecked disabled={!canUpdateSettings} title={!canUpdateSettings ? 'Sem permissão' : undefined} />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -66,7 +69,7 @@ export default function SettingsPage() {
                   Receba notificações no navegador
                 </p>
               </div>
-              <Switch id="push-notifications" />
+              <Switch id="push-notifications" disabled={!canUpdateSettings} title={!canUpdateSettings ? 'Sem permissão' : undefined} />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -76,7 +79,7 @@ export default function SettingsPage() {
                   Receba um resumo diário por e-mail
                 </p>
               </div>
-              <Switch id="daily-report" defaultChecked />
+              <Switch id="daily-report" defaultChecked disabled={!canUpdateSettings} title={!canUpdateSettings ? 'Sem permissão' : undefined} />
             </div>
           </CardContent>
         </Card>
@@ -104,7 +107,7 @@ export default function SettingsPage() {
                   Adicione uma camada extra de segurança
                 </p>
               </div>
-              <Switch id="two-factor" />
+              <Switch id="two-factor" disabled={!canUpdateSettings} title={!canUpdateSettings ? 'Sem permissão' : undefined} />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -114,7 +117,7 @@ export default function SettingsPage() {
                   Encerrar sessão após inatividade
                 </p>
               </div>
-              <Switch id="session-timeout" defaultChecked />
+              <Switch id="session-timeout" defaultChecked disabled={!canUpdateSettings} title={!canUpdateSettings ? 'Sem permissão' : undefined} />
             </div>
           </CardContent>
         </Card>
@@ -142,7 +145,7 @@ export default function SettingsPage() {
                   Reduz o espaçamento entre elementos
                 </p>
               </div>
-              <Switch id="compact-mode" />
+              <Switch id="compact-mode" disabled={!canUpdateSettings} title={!canUpdateSettings ? 'Sem permissão' : undefined} />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -152,7 +155,7 @@ export default function SettingsPage() {
                   Habilitar animações de transição
                 </p>
               </div>
-              <Switch id="animations" defaultChecked />
+              <Switch id="animations" defaultChecked disabled={!canUpdateSettings} title={!canUpdateSettings ? 'Sem permissão' : undefined} />
             </div>
           </CardContent>
         </Card>

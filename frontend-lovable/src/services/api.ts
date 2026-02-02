@@ -1,6 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
 import { useSaaSStore } from '@/stores/saasStore';
+import { devDebug, devError } from '@/lib/logger';
 
 // API Base URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://easy.simc.com.br/api/v1';
@@ -26,8 +27,12 @@ api.interceptors.request.use(
     }
 
     // Attach SaaS context headers
-    const { organizationId, workspaceId } = useSaaSStore.getState();
+    const { tenantId, organizationId, workspaceId } = useSaaSStore.getState();
     
+    if (tenantId !== null && tenantId > 0) {
+      config.headers['X-Tenant-ID'] = tenantId.toString();
+    }
+
     if (organizationId !== null && organizationId > 0) {
       config.headers['X-Organization-ID'] = organizationId.toString();
     }
@@ -42,7 +47,7 @@ api.interceptors.request.use(
       if (safeHeaders.Authorization) {
         safeHeaders.Authorization = 'Bearer [redacted]';
       }
-      console.debug('[API][request]', {
+      devDebug('[API][request]', {
         method,
         url,
         params,
@@ -62,7 +67,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     if (IS_DEV) {
-      console.debug('[API][response]', {
+      devDebug('[API][response]', {
         status: response.status,
         url: response.config?.url,
         data: response.data,
@@ -72,7 +77,7 @@ api.interceptors.response.use(
   },
   async (error: AxiosError) => {
     if (IS_DEV) {
-      console.debug('[API][error]', {
+      devDebug('[API][error]', {
         status: error.response?.status,
         url: error.config?.url,
         data: error.response?.data,
@@ -82,7 +87,8 @@ api.interceptors.response.use(
 
     // Handle Network Error
     if (error.message === 'Network Error') {
-      console.error('Network Error detected. Reloading in 5 seconds...');
+      devError('Network Error detected. Reloading in 5 seconds...');
+      toast.error('Erro de conexão com o servidor. Tentando reconectar em 5 segundos...');
       // Usamos um timeout para dar tempo do usuário ver a mensagem se necessário
       setTimeout(() => {
         window.location.reload();

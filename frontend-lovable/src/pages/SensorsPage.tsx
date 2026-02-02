@@ -54,6 +54,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SkeletonTable } from '@/components/ui/skeleton-card';
+import { useAuthStore } from '@/stores/authStore';
+import { PermissionButton } from '@/components/auth/PermissionButton';
 import api from '@/services/api';
 import { toast } from 'sonner';
 
@@ -89,6 +91,10 @@ interface Equipment {
 }
 
 export default function SensorsPage() {
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canCreate = hasPermission('tenant.sensors.create');
+  const canUpdate = hasPermission('tenant.sensors.update');
+  const canDelete = hasPermission('tenant.sensors.delete');
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [equipments, setEquipments] = useState<Equipment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -172,6 +178,10 @@ export default function SensorsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingSensor ? !canUpdate : !canCreate) {
+      toast.error('Você não tem permissão para esta ação.');
+      return;
+    }
     if (formData.equipment_id === -1) {
       toast.error('Selecione um equipamento');
       return;
@@ -196,6 +206,10 @@ export default function SensorsPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canDelete) {
+      toast.error('Você não tem permissão para excluir.');
+      return;
+    }
     if (!confirm('Excluir sensor?')) return;
     try {
       await api.delete(`/tenant/sensors/${id}`);
@@ -221,7 +235,9 @@ export default function SensorsPage() {
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Sensores</h1>
-        <Button onClick={() => handleOpenDialog()} className="gap-2"><Plus className="h-4 w-4" /> Novo Sensor</Button>
+        <PermissionButton onClick={() => handleOpenDialog()} className="gap-2" permission="tenant.sensors.create">
+          <Plus className="h-4 w-4" /> Novo Sensor
+        </PermissionButton>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
@@ -275,8 +291,21 @@ export default function SensorsPage() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleOpenDialog(sensor)}><Edit className="h-4 w-4 mr-2" /> Editar</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDelete(sensor.id)} className="text-destructive"><Trash2 className="h-4 w-4 mr-2" /> Excluir</DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleOpenDialog(sensor)}
+                        disabled={!canUpdate}
+                        title={!canUpdate ? 'Sem permissão' : undefined}
+                      >
+                        <Edit className="h-4 w-4 mr-2" /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(sensor.id)}
+                        className="text-destructive"
+                        disabled={!canDelete}
+                        title={!canDelete ? 'Sem permissão' : undefined}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -328,7 +357,13 @@ export default function SensorsPage() {
               </Select>
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar</Button>
+              <PermissionButton
+                type="submit"
+                disabled={isSubmitting}
+                permission={editingSensor ? 'tenant.sensors.update' : 'tenant.sensors.create'}
+              >
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar
+              </PermissionButton>
             </DialogFooter>
           </form>
         </DialogContent>

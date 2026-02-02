@@ -56,6 +56,8 @@ import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SkeletonTable } from '@/components/ui/skeleton-card';
 import { useSaaSContext } from '@/hooks/useSaaSContext';
+import { useAuthStore } from '@/stores/authStore';
+import { PermissionButton } from '@/components/auth/PermissionButton';
 import api from '@/services/api';
 import { toast } from 'sonner';
 
@@ -87,6 +89,10 @@ interface Equipment {
 
 export default function EquipmentsPage() {
   const { organizations, workspaces, fetchWorkspaces } = useSaaSContext();
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  const canCreate = hasPermission('tenant.equipments.create');
+  const canUpdate = hasPermission('tenant.equipments.update');
+  const canDelete = hasPermission('tenant.equipments.delete');
   const [equipments, setEquipments] = useState<Equipment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -96,12 +102,18 @@ export default function EquipmentsPage() {
   const [editingEquip, setEditingEquip] = useState<Equipment | null>(null);
   
   const [formData, setFormData] = useState({
+    uuid: '',
     name: '',
     description: '',
     status: 'active',
     organization_id: -1,
     workspace_id: -1,
   });
+  const availableWorkspaces =
+    formData.organization_id >= 0
+      ? workspaces.filter((w) => w.organization_id === formData.organization_id)
+      : workspaces;
+  const organizationOptions = organizations;
 
   useEffect(() => {
     fetchEquipments();
@@ -144,16 +156,20 @@ export default function EquipmentsPage() {
     if (equip) {
       setEditingEquip(equip);
       setFormData({
+        uuid: equip.uuid || '',
         name: equip.name || '',
         description: equip.description || '',
         status: equip.status || 'active',
-        organization_id: equip.organization_id || -1,
-        workspace_id: equip.workspace_id || -1,
+        organization_id: equip.organization_id ?? -1,
+        workspace_id: equip.workspace_id ?? -1,
       });
-      if (equip.organization_id) fetchWorkspaces(equip.organization_id);
+      if (equip.organization_id !== undefined && equip.organization_id !== null) {
+        fetchWorkspaces(equip.organization_id);
+      }
     } else {
       setEditingEquip(null);
       setFormData({
+        uuid: '',
         name: '',
         description: '',
         status: 'active',
@@ -166,6 +182,10 @@ export default function EquipmentsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editingEquip ? !canUpdate : !canCreate) {
+      toast.error('Você não tem permissão para esta ação.');
+      return;
+    }
     if (formData.organization_id === -1 || formData.workspace_id === -1) {
       toast.error('Selecione uma empresa e um local');
       return;
@@ -190,6 +210,10 @@ export default function EquipmentsPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canDelete) {
+      toast.error('Você não tem permissão para excluir.');
+      return;
+    }
     if (!confirm('Excluir equipamento?')) return;
     try {
       await api.delete(`/tenant/equipments/${id}`);
@@ -215,7 +239,9 @@ export default function EquipmentsPage() {
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Equipamentos</h1>
-        <Button onClick={() => handleOpenDialog()} className="gap-2"><Plus className="h-4 w-4" /> Novo Equipamento</Button>
+        <PermissionButton onClick={() => handleOpenDialog()} className="gap-2" permission="tenant.equipments.create">
+          <Plus className="h-4 w-4" /> Novo Equipamento
+        </PermissionButton>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
@@ -268,8 +294,21 @@ export default function EquipmentsPage() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleOpenDialog(equip)}><Edit className="h-4 w-4 mr-2" /> Editar</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDelete(equip.id)} className="text-destructive"><Trash2 className="h-4 w-4 mr-2" /> Excluir</DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleOpenDialog(equip)}
+                        disabled={!canUpdate}
+                        title={!canUpdate ? 'Sem permissão' : undefined}
+                      >
+                        <Edit className="h-4 w-4 mr-2" /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(equip.id)}
+                        className="text-destructive"
+                        disabled={!canDelete}
+                        title={!canDelete ? 'Sem permissão' : undefined}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -284,6 +323,15 @@ export default function EquipmentsPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <DialogHeader><DialogTitle>{editingEquip ? 'Editar' : 'Novo'} Equipamento</DialogTitle></DialogHeader>
             <div className="grid gap-2">
+              <Label>UUID</Label>
+              <Input
+                value={formData.uuid}
+                onChange={(e) => setFormData({ ...formData, uuid: e.target.value })}
+                placeholder="UUID do equipamento"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
               <Label>Nome</Label>
               <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
             </div>
@@ -291,21 +339,43 @@ export default function EquipmentsPage() {
               <Label>Empresa</Label>
               <Select value={String(formData.organization_id)} onValueChange={(v) => {
                 const id = parseInt(v);
-                setFormData({...formData, organization_id: id, workspace_id: -1});
+                if (id === 0) {
+                  setFormData({ ...formData, organization_id: 0, workspace_id: 0 });
+                  fetchWorkspaces(0);
+                  return;
+                }
+                setFormData({ ...formData, organization_id: id, workspace_id: -1 });
                 fetchWorkspaces(id);
               }}>
-                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {organizations.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+                  {Array.from(new Map(
+                    [{ id: 0, name: 'Todas as empresas' }, ...organizationOptions]
+                      .map((o) => [o.id, o])
+                  ).values()).map((o) => (
+                    <SelectItem key={`org-${o.id}`} value={String(o.id)}>{o.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
               <Label>Local</Label>
-              <Select value={String(formData.workspace_id)} onValueChange={(v) => setFormData({...formData, workspace_id: parseInt(v)})}>
-                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <Select
+                value={String(formData.workspace_id)}
+                onValueChange={(v) => setFormData({ ...formData, workspace_id: parseInt(v) })}
+                disabled={formData.organization_id === -1}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {workspaces.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                  {(formData.organization_id === 0
+                    ? Array.from(new Map(
+                        [{ id: 0, name: 'Todos os locais' }, ...availableWorkspaces]
+                          .map((w) => [w.id, w])
+                      ).values())
+                    : availableWorkspaces
+                  ).map((w) => (
+                    <SelectItem key={`ws-${w.id}`} value={String(w.id)}>{w.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -321,7 +391,13 @@ export default function EquipmentsPage() {
               </Select>
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar</Button>
+              <PermissionButton
+                type="submit"
+                disabled={isSubmitting}
+                permission={editingEquip ? 'tenant.equipments.update' : 'tenant.equipments.create'}
+              >
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar
+              </PermissionButton>
             </DialogFooter>
           </form>
         </DialogContent>
